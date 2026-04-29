@@ -48,8 +48,8 @@ public function injectConnector(
 ${items}          ],
         },`;
 
-    // Find "Connector Catalog" label
-    string searchLabel = "Connector Catalog";
+    // Find "Connector catalog" label
+    string searchLabel = "Connector catalog";
     int? labelPos = text.indexOf(string `label: '${searchLabel}'`);
     if labelPos is () {
         // Try with double quotes
@@ -143,7 +143,7 @@ function findAlphabeticalInsertPos(
             // Insert before this connector's opening brace
             // Search backwards from the label position for the opening "{"
             string beforeLabel = fullText.substring(0, baseOffset + lpos);
-            int? bracePos = lastIndexOf(beforeLabel, "        {");
+            int? bracePos = lastLineOpenBrace(beforeLabel);
             if bracePos is int {
                 return bracePos;
             }
@@ -155,6 +155,34 @@ function findAlphabeticalInsertPos(
 
     // Append at end
     return closingBracketPos;
+}
+
+// Find the last '{' that is the first non-whitespace character on its line.
+// Scans backwards so it tolerates any indentation (spaces or tabs).
+function lastLineOpenBrace(string text) returns int? {
+    int i = text.length() - 1;
+    while i >= 0 {
+        if text.substring(i, i + 1) == "{" {
+            // Walk backwards past any leading whitespace on this line
+            int j = i - 1;
+            while j >= 0 {
+                string ch = text.substring(j, j + 1);
+                if ch == " " || ch == "\t" {
+                    j -= 1;
+                } else {
+                    break;
+                }
+            }
+            // '{' is the first non-whitespace on the line if we hit a newline or the start
+            if j < 0 || text.substring(j, j + 1) == "\n" {
+                // Return line start (after \n), not the '{' position, so the caller's
+                // substring(0, pos) does not consume the indentation of this line.
+                return j + 1;
+            }
+        }
+        i -= 1;
+    }
+    return ();
 }
 
 // Find the last occurrence of searchStr in text. Returns () if not found.

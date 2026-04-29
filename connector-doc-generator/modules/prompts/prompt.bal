@@ -84,9 +84,14 @@ public function buildPrompt(ConnectorInput input) returns string|error {
 
     // Phase 2b client-specific substitutions
     extractor:ClientInfo? tc = input.targetClient;
-    prompt = replaceAll(prompt, "{{clientPackage}}", tc is extractor:ClientInfo ? tc.packageName : "");
-    prompt = replaceAll(prompt, "{{clientType}}", tc is extractor:ClientInfo ? tc.clientType : "");
-    prompt = replaceAll(prompt, "{{clientDisplayName}}", tc is extractor:ClientInfo ? tc.displayName : "");
+    if input.phase == 3 {
+        if tc is () {
+            return error("Phase 2b prompt requires targetClient but it was not set in ConnectorInput");
+        }
+        prompt = replaceAll(prompt, "{{clientPackage}}", tc.packageName);
+        prompt = replaceAll(prompt, "{{clientType}}", tc.clientType);
+        prompt = replaceAll(prompt, "{{clientDisplayName}}", tc.displayName);
+    }
 
     return prompt;
 }
