@@ -9,8 +9,9 @@ import io.ballerina.cli.BLauncherCmd;
 import picocli.CommandLine;
 import io.ballerina.connectortool.exceptions.CliException;
 import io.ballerina.connectortool.utils.BallerinaProjectPathValidationUtils;
+import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
 import io.ballerina.connectortool.utils.OpenApiPathValidationUtils;
-import io.ballerina.connectortool.utils.Utils;
+import io.ballerina.connectortool.utils.ProcessUtils;
 
 @CommandLine.Command(
     name = "openapi", 
@@ -23,6 +24,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     private final String NAME = "openapi";
     private PrintStream outStream;
     private PrintStream errorStream;
+    private boolean exitWhenFinish = true;
 
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
@@ -32,6 +34,12 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
 
     @CommandLine.Option(names = {"-o", "--output"}, description = "output path for the generated connector.")
     public String outputPath;
+
+    @CommandLine.Option(names = {"-q", "--quiet"}, description = "Suppress all output except errors.")
+    public boolean quietFlag;
+
+    @CommandLine.Option(names = {"-v", "--verbose"}, description = "Show detailed diagnostic output including subprocess commands and batch details.")
+    public boolean verboseFlag;
 
     public OpenApiAutomatorWorkflow() {
         outStream = System.out;
@@ -52,18 +60,26 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
         }
 
         try {
+            if (quietFlag && verboseFlag) {
+                throw new CliException("options -q/--quiet and -v/--verbose are mutually exclusive", 2);
+            }
+            String logLevel = quietFlag ? "quiet" : verboseFlag ? "verbose" : "normal";
+
             Path openApiSpecPath = OpenApiPathValidationUtils.validate(inputPath);
             Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.validate(outputPath);
 
-            Utils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiWorkflow",
-                    openApiSpecPath.toString(), ballerinaProjectPath.toString());
+            BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiWorkflow",
+                    openApiSpecPath.toString(), ballerinaProjectPath.toString(), logLevel);
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
-            System.exit(e.getExitCode());
+            ProcessUtils.exit(e.getExitCode(), exitWhenFinish);
+            return;
         } catch (Exception e) {
             errorStream.println("bal: fatal: unexpected error: " + e.getMessage());
-            System.exit(1);
+            ProcessUtils.exitError(exitWhenFinish);
+            return;
         }
+        ProcessUtils.exitSuccess(exitWhenFinish);
     }
 
     @Override
