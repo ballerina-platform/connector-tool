@@ -525,7 +525,7 @@ function executeGenerateDocs(string[] args) returns error? {
 
     string[] docFlagArgs = args.slice(flagsStartIndex);
     oautils:LogLevel docLogLevel = parseOpenApiLogLevel(docFlagArgs);
-    error? docResult = document_generator:executeDocGen(docCommand, connectorOutputPath, docLogLevel);
+    error? docResult = document_generator:executeDocGen(docCommand, connectorOutputPath, logLevel = docLogLevel);
 
     return docResult;
 }
@@ -1623,14 +1623,14 @@ function executeOpenApiCommand(string[] args) returns error? {
                 io:fprintln(io:stderr, "generate-docs: requires <doc-command> <connector-path>");
                 return;
             }
-            return document_generator:executeDocGen(positional[0], positional[1], logLevel);
+            return document_generator:executeDocGen(positional[0], positional[1], logLevel = logLevel);
         }
         "generate-all" => {
             if positional.length() < 1 {
                 io:fprintln(io:stderr, "generate-all: requires <connector-path>");
                 return;
             }
-            return document_generator:executeDocGen("generate-all", positional[0], logLevel);
+            return document_generator:executeDocGen("generate-all", positional[0], logLevel = logLevel);
         }
         "fix-code" => {
             if positional.length() < 1 {
@@ -1743,20 +1743,21 @@ function runOpenApiPipeline(string[] args) returns error? {
     printOpenApiPipelineHeader(openApiSpec, outputDir, logLevel, false);
 
     printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel);
+    string defaultSpecDir = string `${outputDir}/docs/spec`;
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, defaultSpecDir, logLevel);
     if sanitizeResult is error {
         oautils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
         return sanitizeResult;
     }
     oautils:logInfo("✓ sanitization complete", logLevel);
     error? sanitationsDocResult = sanitizor:generateSanitationsDoc(
-        openApiSpec, string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`, outputDir, logLevel);
+        openApiSpec, string `${defaultSpecDir}/aligned_ballerina_openapi.json`, defaultSpecDir, logLevel);
     if sanitationsDocResult is error {
         oautils:logWarn(string `could not generate sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
     }
 
     printOpenApiStepHeader(2, "Generating Ballerina Client", logLevel);
-    string sanitizedSpec = string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`;
+    string sanitizedSpec = string `${defaultSpecDir}/aligned_ballerina_openapi.json`;
     string clientPath = string `${outputDir}/ballerina`;
     error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, logLevel);
     if clientResult is error {
@@ -1783,7 +1784,7 @@ function runOpenApiPipeline(string[] args) returns error? {
     }
 
     printOpenApiStepHeader(5, "Generating Tests", logLevel);
-    error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
+    error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
     if testResult is error {
         oautils:logWarn(string `test generation failed: ${testResult.message()} — continuing`, logLevel);
     } else {
@@ -1791,7 +1792,7 @@ function runOpenApiPipeline(string[] args) returns error? {
     }
 
     printOpenApiStepHeader(6, "Generating Documentation", logLevel);
-    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel);
+    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel = logLevel);
     if docResult is error {
         oautils:logWarn(string `documentation generation failed: ${docResult.message()}`, logLevel);
     } else {
@@ -1809,7 +1810,8 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
         oautils:logWarn("AI service unavailable before sanitations — continuing with available parsing", logLevel);
     }
 
-    string sanitationsPath = string `${outputDir}/docs/spec/sanitations.md`;
+    string regenSpecDir = string `${outputDir}/docs/spec`;
+    string sanitationsPath = string `${regenSpecDir}/sanitations.md`;
     error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec, logLevel);
     if applyResult is error {
         oautils:logWarn(string `could not apply recorded sanitations: ${applyResult.message()} — continuing`, logLevel);
@@ -1818,13 +1820,13 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
     }
 
     printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel);
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, regenSpecDir, logLevel);
     if sanitizeResult is error {
         return sanitizeResult;
     }
 
-    string sanitizedSpec = string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`;
-    error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, outputDir, logLevel);
+    string sanitizedSpec = string `${regenSpecDir}/aligned_ballerina_openapi.json`;
+    error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, regenSpecDir, logLevel);
     if sanitationsDocResult is error {
         oautils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
     }
@@ -1856,7 +1858,7 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
             }
 
             printOpenApiStepHeader(4, "Regenerating Tests for New API Version", logLevel);
-            error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
+            error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
             if testResult is error {
                 return testResult;
             }
@@ -1870,7 +1872,7 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
         }
     } else {
         printOpenApiStepHeader(4, "Regenerating Tests", logLevel);
-        error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
+        error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
         if testResult is error {
             oautils:logWarn(string `test regeneration failed: ${testResult.message()}`, logLevel);
         }
@@ -1883,7 +1885,7 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
     }
 
     printOpenApiStepHeader(6, "Generating Documentation", logLevel);
-    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel);
+    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel = logLevel);
     if docResult is error {
         oautils:logWarn(string `documentation generation failed: ${docResult.message()}`, logLevel);
     }

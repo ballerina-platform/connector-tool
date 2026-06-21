@@ -21,6 +21,7 @@ import ballerina/file;
 import ballerina/io;
 import ballerina/regex;
 import ballerina/time;
+import ballerina/yaml;
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -85,18 +86,18 @@ type SanitationRules record {|
 #
 # + originalSpecPath - path to the raw input OpenAPI spec
 # + alignedSpecPath  - path to the aligned_ballerina_openapi.json produced by sanitizor
-# + outputDir        - connector root directory (sanitations.md goes to outputDir/docs/spec/)
+# + specDir          - directory where sanitations.md is written (same dir as the aligned spec)
 # + logLevel         - controls diagnostic output verbosity
 # + return           - error if writing fails
 public function generateSanitationsDoc(
         string originalSpecPath,
         string alignedSpecPath,
-        string outputDir,
+        string specDir,
         utils:LogLevel logLevel = "normal") returns error? {
 
-    string sanitationsPath = outputDir + "/docs/spec/sanitations.md";
+    string sanitationsPath = specDir + "/sanitations.md";
 
-    json|error originalResult = io:fileReadJson(originalSpecPath);
+    json|error originalResult = readSpecAsJson(originalSpecPath);
     if originalResult is error {
         return originalResult;
     }
@@ -1346,6 +1347,35 @@ function extractSchemas(json spec) returns map<json> {
         }
     }
     return {};
+}
+
+// ─────────────────────────────────────────────────────────────
+// SPEC READING
+// ─────────────────────────────────────────────────────────────
+
+function readSpecAsJson(string specPath) returns json|error {
+    if isYamlFormat(specPath) {
+        string|io:Error content = io:fileReadString(specPath);
+        if content is io:Error {
+            return error("Failed to read YAML spec: " + content.message());
+        }
+        json|yaml:Error parsed = yaml:readString(content);
+        if parsed is json {
+            return parsed;
+        }
+        // Ballerina's YAML parser rejects backtick (U+0060) — same fix as convertAlignedYamlToJson.
+        int[] sanitizedCodePoints = from int cp in content.toCodePointInts()
+            select (cp == 96 ? 95 : cp);
+        string|error sanitized = string:fromCodePointInts(sanitizedCodePoints);
+        if sanitized is string {
+            json|yaml:Error retryParsed = yaml:readString(sanitized);
+            if retryParsed is json {
+                return retryParsed;
+            }
+        }
+        return error("Failed to parse YAML spec: " + (<yaml:Error>parsed).message());
+    }
+    return io:fileReadJson(specPath);
 }
 
 // ─────────────────────────────────────────────────────────────
