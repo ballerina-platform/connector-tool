@@ -1,27 +1,25 @@
-apply plugin: 'java'
+plugins {
+    id 'java'
+}
 
 group = 'io.ballerina.connector.automator'
 version = '0.1.0'
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 repositories {
     mavenCentral()
-    maven {
-        url 'https://maven.pkg.github.com/ballerina-platform/ballerina-lang'
-    }
     maven {
         url 'https://maven.wso2.org/nexus/content/repositories/releases/'
     }
 }
 
 dependencies {
-    // Ballerina 2201.12.0 runtime
-    // Use local Ballerina distribution jars for compileOnly to avoid GitHub Packages auth
-    // Resolve Ballerina home at runtime instead of hardcoding a path.
+    // Ballerina runtime — resolved from local distribution to avoid requiring GitHub Packages auth.
     def ballerinaHome = System.getenv("BALLERINA_HOME") ?:
             System.getenv("BAL_HOME") ?:
             System.getProperty("ballerina.home")
@@ -59,12 +57,12 @@ dependencies {
     } else {
         logger.warn("Ballerina lib dir not found. Set BALLERINA_HOME or BAL_HOME to compile native sources.")
     }
-    
+
     testImplementation 'org.testng:testng:7.10.2'
-    // ASM for parsing .class files without loading classes
+    // ASM for parsing .class files without loading them
     implementation 'org.ow2.asm:asm:9.5'
     implementation 'org.ow2.asm:asm-tree:9.5'
-    // JavaParser for parsing source .java files to extract javadoc/parameter names
+    // JavaParser for extracting javadoc and parameter names from source .java files
     implementation 'com.github.javaparser:javaparser-core:3.25.4'
     implementation 'com.github.javaparser:javaparser-symbol-solver-core:3.25.4'
     // HTML parser for extracting javadoc descriptions
@@ -74,7 +72,6 @@ dependencies {
 compileJava {
     options.encoding = 'UTF-8'
     options.compilerArgs << '-parameters'
-    // Enable deprecation linting to surface deprecated API usage locations
     options.compilerArgs << '-Xlint:deprecation'
 }
 
@@ -82,7 +79,7 @@ test {
     useTestNG()
 }
 
-// Create fat JAR with all dependencies
+// Fat JAR — all runtime deps bundled so the Ballerina pack step can reference a single artifact
 jar {
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }

@@ -1,4 +1,19 @@
+pluginManagement {
+    plugins {
+        id 'com.gradleup.shadow'       version "${shadowVersion}"
+        id 'com.github.spotbugs'       version "${spotbugsVersion}"
+        id 'de.undercouch.download'    version "${downloadVersion}"
+        id 'net.researchgate.release'  version "${releaseVersion}"
+    }
+
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = 'connector-ballerina-cli-tool'
 
 include ':connector-cli'
 include ':connector-core'
+include ':connector-tool'
+include ':config:checkstyle'

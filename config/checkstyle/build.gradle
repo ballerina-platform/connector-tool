@@ -1,0 +1,12 @@
+plugins {
+    id 'de.undercouch.download'
+}
+
+task downloadCheckstyleRuleFiles(type: Download) {
+    src([
+        'https://raw.githubusercontent.com/wso2/code-quality-tools/v1.4/checkstyle/jdk-17/checkstyle.xml',
+        'https://raw.githubusercontent.com/wso2/code-quality-tools/v1.4/checkstyle/jdk-17/suppressions.xml'
+    ])
+    dest project.projectDir
+    overwrite false
+}

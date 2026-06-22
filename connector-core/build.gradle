@@ -1,0 +1,40 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
+plugins {
+    id 'base'
+}
+
+description = 'Connector Core — Automator Ballerina package and native SDK analyzer'
+
+task buildNative {
+    description = 'Build the native SDK analyzer fat JAR.'
+    group = 'build'
+    doLast {
+        project.exec {
+            workingDir "${project.projectDir}/connector-automator/modules/sdkanalyzer/native"
+            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+                commandLine 'cmd', '/c', 'gradlew.bat build'
+            } else {
+                commandLine 'sh', '-c', './gradlew build'
+            }
+        }
+    }
+}
+
+task packAutomator {
+    description = 'Pack the connector-automator Ballerina package.'
+    group = 'build'
+    dependsOn buildNative
+    doLast {
+        project.exec {
+            workingDir "${project.projectDir}/connector-automator"
+            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+                commandLine 'cmd', '/c', 'bal pack'
+            } else {
+                commandLine 'sh', '-c', 'bal pack'
+            }
+        }
+    }
+}
+
+build.dependsOn packAutomator
