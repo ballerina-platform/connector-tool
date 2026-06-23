@@ -1031,7 +1031,7 @@ function applyDeterministicJavaCompileFixes(string originalCode, CompilationErro
                 if trimmed == "Object call() throws Exception;" {
                     string ws = getLeadingWhitespace(updatedLines[i]);
                     updatedLines[i] = string `${ws}Object call() throws Exception;`;
-                    fixedInterface = false;
+                    fixedInterface = true;
                     break;
                 }
             }
