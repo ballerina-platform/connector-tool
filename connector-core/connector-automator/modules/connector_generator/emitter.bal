@@ -309,7 +309,7 @@ function ensureGradleProperty(string rootDir, string propKey, string propValue) 
 
     boolean exists = check file:test(propsPath, file:EXISTS);
     if !exists {
-        check io:fileWriteString(propsPath, string `${propKey}=${propValue}\n`);
+        check io:fileWriteString(propsPath, string `${propKey}=${propValue}` + "\n");
         return;
     }
 

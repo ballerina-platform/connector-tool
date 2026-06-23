@@ -26,10 +26,6 @@ public class BallerinaRuntimeUtils {
         return newArray;
     }
 
-    public static void callBallerinaRunteimAPi(String org, String module, String version, BArray args) {
-        callBallerinaRuntimeApiWithSingleArg(org, module, version, args);
-    }
-
     public static void callBallerinaRuntimeApiWithSingleArg(String org, String module, String version, BArray args) {
         Runtime runtime = null;
         boolean runtimeStarted = false;
@@ -82,34 +78,6 @@ public class BallerinaRuntimeUtils {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Error occurred while running " + module + ": " + e.getMessage(), e);
-        } finally {
-            if (runtimeStarted && runtime != null) {
-                runtime.stop();
-            }
-        }
-    }
-
-    public static void callBallerinaRunteimAPiWithName(
-            String org, String module, String version, String name, BArray args) {
-        Runtime runtime = null;
-        boolean runtimeStarted = false;
-        try {
-            Module balModule = new Module(org, module, version);
-            BArray workflowArgs = BallerinaRuntimeUtils.addToFront(args, name);
-            runtime = Runtime.from(balModule);
-
-            runtime.init();
-            runtime.start();
-            runtimeStarted = true;
-
-            Object result = runtime.callFunction(balModule, "main", null, workflowArgs);
-            if (result instanceof BError error) {
-                throw new RuntimeException(error.getErrorMessage().toString());
-            }
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("Error occurred while running connector automator: " + e.getMessage(), e);
         } finally {
             if (runtimeStarted && runtime != null) {
                 runtime.stop();

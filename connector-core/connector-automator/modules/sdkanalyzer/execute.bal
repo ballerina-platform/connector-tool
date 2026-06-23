@@ -195,7 +195,7 @@ function printUsage() {
     io:fprintln(io:stderr, "  quiet                 Minimal logging output");
     io:fprintln(io:stderr, "  include-deprecated    Include deprecated methods/classes");
     io:fprintln(io:stderr, "  exclude-packages=     Comma-separated packages to exclude");
-    io:fprintln(io:stderr, "  methods-to-list=N     Number of top-ranked methods to include (default: 5)");
+    io:fprintln(io:stderr, "  methods-to-list=N     Number of top-ranked methods to include (default: 40)");
     io:fprintln(io:stderr, "");
     io:fprintln(io:stderr, "EXAMPLES:");
     io:fprintln(io:stderr, "  bal run -- analyze ./s3-2.25.16.jar ./s3-2.25.16-javadoc.jar ./output");

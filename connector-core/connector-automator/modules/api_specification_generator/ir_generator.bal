@@ -554,11 +554,7 @@ function deduplicateEnumMemberNames(IREnum[] enums) returns IREnum[] {
             }
             seenInEnum[candidate] = suffix;
             seenInEnum[uniqueMember] = 0;
-            if count > 1 {
-                newValues.push({member: uniqueMember, value: v.value});
-            } else {
-                newValues.push({member: uniqueMember, value: v.value});
-            }
+            newValues.push({member: uniqueMember, value: v.value});
         }
         result.push({name: e.name, kind: "ENUM", nativeType: "string", values: newValues});
     }

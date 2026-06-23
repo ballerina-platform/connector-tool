@@ -300,7 +300,7 @@ function extractPackageName(string tomlContent) returns string {
 }
 
 function detectClientMethodType(string clientContent) returns "resource"|"remote"|error {
-    regexp:RegExp resourcePattern = re `resource\s+isolated\sfunction\s(get|post|put|patch|delete|head|otions)\s+`;
+    regexp:RegExp resourcePattern = re `resource\s+isolated\sfunction\s(get|post|put|patch|delete|head|options)\s+`;
     regexp:Span[] resourceMatches = resourcePattern.findAll(clientContent);
 
     if resourceMatches.length() > 0 {

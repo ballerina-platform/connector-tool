@@ -41,8 +41,7 @@ function parseOpenApiLogLevel(string[] args) returns oautils:LogLevel {
 }
 
 # Public entry point for the SDK workflow. Called directly from Java via
-# BallerinaRuntimeUtils.callBallerinaFunctionWithBArray, replacing the old
-# main() + callBallerinaRunteimAPiWithName pattern.
+# BallerinaRuntimeUtils.callBallerinaFunctionWithBArray.
 # + args - Subcommand arguments (no "sdk" prefix)
 # + return - Error if the workflow fails
 public function runSdkWorkflow(string[] args) returns error? {

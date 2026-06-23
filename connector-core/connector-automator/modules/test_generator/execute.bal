@@ -151,8 +151,8 @@ public function executeOpenApiTestGen(string connectorPath, string specPath) ret
 }
 
 function validateApiKey() returns error? {
-    string|error apiKey = os:getEnv("ANTHROPIC_API_KEY");
-    if apiKey is error {
+    string apiKey = os:getEnv("ANTHROPIC_API_KEY");
+    if apiKey.length() == 0 {
         return error("ANTHROPIC_API_KEY not configured");
     }
 }

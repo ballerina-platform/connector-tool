@@ -74,7 +74,7 @@ public function generateConnector(ConnectorGeneratorConfig config)
     if validationFailures.length() > 0 {
         string validationSummary = "";
         foreach string failure in validationFailures {
-            validationSummary += string `\n- ${failure}`;
+            validationSummary += "\n- " + failure;
         }
         return error ConnectorGeneratorError(
             string `Generated connector failed validation: Validation failures:${validationSummary}
@@ -550,7 +550,7 @@ function normalizeClientInteropDeclarations(string clientBal) returns string {
         return normalized;
     }
 
-    return string `${normalized}\n\n${string:'join("\n\n", ...moduleLevelExterns)}\n`;
+    return normalized + "\n\n" + string:'join("\n\n", ...moduleLevelExterns) + "\n";
 }
 
 type ClientDocMap record {| 
