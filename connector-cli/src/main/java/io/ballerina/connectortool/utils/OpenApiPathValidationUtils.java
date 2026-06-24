@@ -60,24 +60,27 @@ public final class OpenApiPathValidationUtils {
         boolean jsonSpec = fileName.endsWith(".json");
         boolean yamlSpec = fileName.endsWith(".yaml") || fileName.endsWith(".yml");
         if (!jsonSpec && !yamlSpec) {
-            throw new CliException("invalid OpenAPI specification", 1, option, specPath.toString());
+            throw new CliException("unsupported file type — expected .json, .yaml, or .yml", 1, option,
+                    specPath.toString());
         }
 
         try {
             ObjectMapper mapper = jsonSpec ? new ObjectMapper() : new ObjectMapper(new YAMLFactory());
             JsonNode root = mapper.readTree(specPath.toFile());
             if (root == null || !root.isObject()) {
-                throw new CliException("invalid OpenAPI specification", 1, option, specPath.toString());
+                throw new CliException("file does not contain a valid JSON/YAML object", 1, option,
+                        specPath.toString());
             }
             if (!hasNonBlankText(root, "openapi") && !hasNonBlankText(root, "swagger")) {
-                throw new CliException("invalid OpenAPI specification", 1, option, specPath.toString());
+                throw new CliException("missing 'openapi' or 'swagger' version field", 1, option,
+                        specPath.toString());
             }
             JsonNode pathsNode = root.get("paths");
             if (pathsNode == null || !pathsNode.isObject()) {
-                throw new CliException("invalid OpenAPI specification", 1, option, specPath.toString());
+                throw new CliException("missing or invalid 'paths' object", 1, option, specPath.toString());
             }
         } catch (IOException e) {
-            throw new CliException("invalid OpenAPI specification", 1, option, specPath.toString());
+            throw new CliException("failed to parse file: " + e.getMessage(), 1, option, specPath.toString());
         }
     }
 
