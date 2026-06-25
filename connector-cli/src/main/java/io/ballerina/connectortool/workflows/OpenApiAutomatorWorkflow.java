@@ -25,6 +25,7 @@ import io.ballerina.connectortool.spi.ConnectorWorkflow;
 import io.ballerina.connectortool.utils.BallerinaProjectPathValidationUtils;
 import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
 import io.ballerina.connectortool.utils.ExamplesOutputPathValidationUtils;
+import io.ballerina.connectortool.utils.LogLevelResolutionUtils;
 import io.ballerina.connectortool.utils.OpenApiPathValidationUtils;
 import io.ballerina.connectortool.utils.OpenApiStageValidationUtils;
 import io.ballerina.connectortool.utils.ProcessUtils;
@@ -123,11 +124,8 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
 
         try {
             Utils.validateApiKey();
-            if (quietFlag && verboseFlag) {
-                throw new CliException("options -q/--quiet and -v/--verbose are mutually exclusive", 2);
-            }
-            String logLevel = quietFlag ? "quiet" : verboseFlag ? "verbose" : "normal";
 
+            String logLevel = LogLevelResolutionUtils.resolve(quietFlag, verboseFlag).name().toLowerCase();
             Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.resolve(outputPath);
             Path specDirPath = SpecDirResolutionUtils.resolve(specDir);
             String excludedArg = OpenApiStageValidationUtils.resolve(excludedStages, ballerinaProjectPath, specDirPath);
