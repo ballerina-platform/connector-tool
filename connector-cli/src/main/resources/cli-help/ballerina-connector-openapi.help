@@ -1,0 +1,115 @@
+NAME
+       bal connector openapi - Generate and maintain Ballerina connectors from
+       OpenAPI specifications.
+
+SYNOPSIS
+       bal connector openapi -i <openapi-spec> [-o <output-dir>]
+                    [-x <stage>...] [--spec-dir <path>] [--example-dir <path>]
+                    [--license <path>] [-t <tag>...] [--operations <id>...]
+                    [--remote] [-q | -v] [--interactive] [-h]
+
+DESCRIPTION
+       Run AI-assisted stages to sanitize an OpenAPI specification, generate
+       a Ballerina client, fix compilation errors, generate tests and
+       examples, and produce README documentation.
+
+       All five stages run by default in the following order:
+       sanitize → client → tests → examples → docs.
+
+       Use -x/--exclude to skip individual stages and run only the stages
+       you need. Already-recorded sanitations are re-applied automatically
+       at the start of each run when the sanitize stage is active.
+
+STAGES
+       sanitize
+            Flatten and align the OpenAPI specification. Apply AI-assisted
+            improvements to operation IDs, schema names, and descriptions.
+            Record sanitations for future regeneration runs.
+
+       client
+            Generate a Ballerina client project from the sanitized
+            specification. Automatically apply compilation fixes if errors
+            are found after generation.
+
+       tests
+            Generate connector tests, including a mock server module and a
+            test suite derived from the connector and source specification.
+
+       examples
+            Generate AI-assisted Ballerina usage examples for the connector.
+
+       docs
+            Generate README documentation for the connector, its tests,
+            and its examples.
+
+OPTIONS
+       -i <path>, --input=<path>
+            Mandatory. Path to the OpenAPI specification file.
+
+       -o <path>, --output=<path>
+            Path to the output directory for the generated connector
+            workspace. Defaults to the current working directory.
+
+       --spec-dir=<path>
+            Directory where the aligned specification and sanitations.md
+            are written. Content is placed inside a docs/spec subdirectory.
+            Defaults to <output-dir>/docs/spec.
+
+       --example-dir=<path>
+            Output directory for generated examples. Defaults to
+            <output-dir>/examples.
+
+       --license=<path>
+            License file path for generated Ballerina source headers.
+
+       -t <tag>, --tags=<tag>
+            OpenAPI tag to include during client generation. Repeatable.
+
+       --operations=<id>
+            OpenAPI operation ID to include during client generation.
+            Repeatable.
+
+       -x <stage>, --exclude=<stage>
+            Exclude a pipeline stage. Repeatable. Valid values: sanitize,
+            client, tests, examples, docs.
+
+       --remote
+            Generate client APIs as remote methods instead of the default
+            resource methods.
+
+       --interactive
+            Pause after each stage and prompt for confirmation before
+            continuing to the next stage.
+
+       -q, --quiet
+            Suppress all output except errors.
+
+       -v, --verbose
+            Show detailed diagnostic output including subprocess commands
+            and stage batch details.
+
+       -h, --help
+            Print help information for the openapi workflow.
+
+EXAMPLES
+       Run the full OpenAPI connector pipeline.
+           $ bal connector openapi -i ./openapi.yaml -o ./out
+
+       Run only the sanitize stage.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -x client -x tests -x examples -x docs
+
+       Generate a client from an existing sanitized specification with a
+       license header and tag filters.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -x sanitize -x tests -x examples -x docs \
+                 --license ./license.txt -t Accounts -t Payments
+
+       Regenerate examples for an existing connector workspace.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -x sanitize -x client -x tests -x docs
+
+       Run the full pipeline with verbose output and interactive stage
+       confirmation.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -v --interactive

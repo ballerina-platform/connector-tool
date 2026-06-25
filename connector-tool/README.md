@@ -4,11 +4,11 @@
 [![GitHub issues](https://img.shields.io/github/issues/ballerina-platform/connector-tool.svg?label=Open%20Issues)](https://github.com/ballerina-platform/connector-tool/issues)
 
 `bal connector` is a Ballerina CLI tool that automates the generation and maintenance of Ballerina
-connectors from OpenAPI specifications and Java SDKs. It exposes two AI-assisted workflows: `bal connector openapi`
-sanitizes an OpenAPI contract and runs a full pipeline — generating the client, fixing compilation errors,
-and producing tests, examples, and documentation — while `bal connector sdk` takes a Java SDK JAR and produces
-a typed Ballerina client backed by a native Java adaptor through the same end-to-end pipeline. Both workflows
-use Anthropic Claude (via `ballerinax/ai.anthropic`) and require an `ANTHROPIC_API_KEY` to run.
+connectors from OpenAPI specifications and Java SDKs. It runs AI-assisted, multi-stage pipelines —
+sanitizing contracts, generating clients, repairing compilation errors, and producing tests, examples,
+and documentation — so that a complete, ready-to-use connector project comes out the other end with a
+single command. The tool uses Anthropic Claude (via `ballerinax/ai.anthropic`) for spec cleanup, code
+repair, example writing, and documentation, and requires an `ANTHROPIC_API_KEY` to run.
 
 ```bash
 bal connector openapi -i ./openapi.yaml
@@ -52,9 +52,6 @@ The tool is built in three layers. Execute the following commands in order from 
         cd connector-cli
         ./gradlew shadowJar
         cd -
-
-This produces `connector-cli/build/libs/connector-tool-0.1.0.jar`, the artifact referenced by
-`connector-tool/BalTool.toml`.
 
 ### Installing Locally
 

@@ -1,0 +1,64 @@
+NAME
+       bal connector - Generate and maintain Ballerina connector assets with AI
+       assistance.
+
+SYNOPSIS
+       bal connector -h | --help
+       bal connector openapi -i <openapi-spec> [-o <output-dir>] [options...]
+       bal connector sdk <command> <arguments...> [options...]
+
+DESCRIPTION
+       The `bal connector` command provides AI-assisted workflows for
+       generating, sanitizing, validating, testing, documenting, and
+       maintaining Ballerina connectors from OpenAPI specifications or Java
+       SDKs.
+
+       Use one of the available workflows to generate connector assets.
+       Each workflow exposes its own commands and options.
+
+WORKFLOWS
+       openapi
+            Generate and maintain Ballerina connectors from OpenAPI
+            specifications. Runs a configurable pipeline covering
+            sanitization, client generation, code repair, test and example
+            generation, and documentation.
+
+       sdk
+            Generate and maintain Ballerina connectors from Java SDKs.
+            Provides discrete commands for SDK analysis, specification and
+            IR generation, connector code generation, code repair, test and
+            example generation, and documentation.
+
+ENVIRONMENT
+       ANTHROPIC_API_KEY
+            Required for all workflow stages. Both the openapi and sdk
+            workflows call the Anthropic API at every stage and will fail
+            at startup if this variable is not set.
+
+            Set the variable before running any connector command:
+
+            macOS / Linux:
+                  $ export ANTHROPIC_API_KEY=<your-api-key>
+
+            Windows (Command Prompt):
+                  > set ANTHROPIC_API_KEY=<your-api-key>
+
+            Windows (PowerShell):
+                  > $env:ANTHROPIC_API_KEY="<your-api-key>"
+
+OPTIONS
+       -h, --help
+            Print help information for `bal connector` or a workflow.
+
+EXAMPLES
+       Run the full OpenAPI connector pipeline.
+           $ bal connector openapi -i ./openapi.yaml -o ./out
+
+       Run the full Java SDK connector pipeline.
+           $ bal connector sdk pipeline example-sdk ./out
+
+       Print help for the openapi workflow.
+           $ bal connector openapi --help
+
+       Print help for the sdk workflow.
+           $ bal connector sdk --help
