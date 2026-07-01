@@ -53,6 +53,8 @@ function generateMockServer(string connectorPath, string specPath) returns error
     if check file:test(serviceFileOld, file:EXISTS) {
         check file:rename(serviceFileOld, serviceFileNew);
         utils:logVerbose("renamed service file to mock_service.bal");
+    } else {
+        return error(string `bal openapi --mode service succeeded but expected scaffold not found: ${serviceFileOld}`);
     }
 
     // Merge service-unique types (e.g. AnydataDefault) into root types.bal, then delete tests/types.bal.
@@ -87,52 +89,66 @@ function mergeServiceTypes(string serviceTypesPath, string rootTypesPath) return
         }
     }
 
-    // Walk tests/types.bal and collect type definition blocks whose names are NOT in root
+    // Walk tests/types.bal, collecting import lines missing from root and type blocks not in root
     string[] serviceLines = re`\n`.split(serviceContent);
+    string missingImports = "";
     string uniqueDefinitions = "";
     int lineIdx = 0;
 
     while lineIdx < serviceLines.length() {
         string line = serviceLines[lineIdx];
-        regexp:Span? typeStart = re`^(?:public )?type [A-Za-z][A-Za-z0-9_]* `.find(line);
-        if typeStart is regexp:Span {
-            // Extract type name from the matched prefix
-            string matched = typeStart.substring();
-            int? typeKw = matched.indexOf("type ");
-            string typeName = "";
-            if typeKw is int {
-                string afterType = matched.substring(typeKw + 5);
-                int? trailingSpace = afterType.indexOf(" ");
-                if trailingSpace is int {
-                    typeName = afterType.substring(0, trailingSpace);
-                }
+
+        // Carry over any import that root types.bal does not already have
+        if line.trim().startsWith("import ") {
+            if !rootContent.includes(line.trim()) {
+                missingImports += line + "\n";
             }
-
-            if typeName.length() > 0 && rootTypeNames.indexOf(typeName) is () {
-                // Unique to service — collect the full definition block
-                string block = line + "\n";
-                int depth = re`\{`.findAll(line).length() - re`\}`.findAll(line).length();
-                boolean blockDone = depth == 0 && line.endsWith(";");
-                lineIdx += 1;
-
-                while !blockDone && lineIdx < serviceLines.length() {
-                    string blockLine = serviceLines[lineIdx];
-                    block += blockLine + "\n";
-                    depth += re`\{`.findAll(blockLine).length() - re`\}`.findAll(blockLine).length();
-                    lineIdx += 1;
-                    blockDone = depth <= 0 && (blockLine.endsWith("};") || blockLine.endsWith("|};") || blockLine.endsWith(";"));
+            lineIdx += 1;
+        } else {
+            regexp:Span? typeStart = re`^(?:public )?type [A-Za-z][A-Za-z0-9_]* `.find(line);
+            if typeStart is regexp:Span {
+                // Extract type name from the matched prefix
+                string matched = typeStart.substring();
+                int? typeKw = matched.indexOf("type ");
+                string typeName = "";
+                if typeKw is int {
+                    string afterType = matched.substring(typeKw + 5);
+                    int? trailingSpace = afterType.indexOf(" ");
+                    if trailingSpace is int {
+                        typeName = afterType.substring(0, trailingSpace);
+                    }
                 }
-                uniqueDefinitions += block + "\n";
+
+                if typeName.length() > 0 && rootTypeNames.indexOf(typeName) is () {
+                    // Unique to service — collect the full definition block
+                    string block = line + "\n";
+                    int depth = re`\{`.findAll(line).length() - re`\}`.findAll(line).length();
+                    boolean blockDone = depth == 0 && line.endsWith(";");
+                    lineIdx += 1;
+
+                    while !blockDone && lineIdx < serviceLines.length() {
+                        string blockLine = serviceLines[lineIdx];
+                        block += blockLine + "\n";
+                        depth += re`\{`.findAll(blockLine).length() - re`\}`.findAll(blockLine).length();
+                        lineIdx += 1;
+                        blockDone = depth <= 0 && (blockLine.endsWith("};") || blockLine.endsWith("|};") || blockLine.endsWith(";"));
+                        // Safety: negative depth means we have overshot — stop to avoid consuming unrelated lines
+                        if depth < 0 {
+                            break;
+                        }
+                    }
+                    uniqueDefinitions += block + "\n";
+                } else {
+                    lineIdx += 1;
+                }
             } else {
                 lineIdx += 1;
             }
-        } else {
-            lineIdx += 1;
         }
     }
 
-    if uniqueDefinitions.trim().length() > 0 {
-        check io:fileWriteString(rootTypesPath, "\n" + uniqueDefinitions, io:APPEND);
+    if uniqueDefinitions.trim().length() > 0 || missingImports.length() > 0 {
+        check io:fileWriteString(rootTypesPath, "\n" + missingImports + uniqueDefinitions, io:APPEND);
         utils:logVerbose("merged service-unique types into root types.bal");
     }
 
