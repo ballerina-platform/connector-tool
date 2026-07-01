@@ -15,6 +15,7 @@
 
 import wso2/connector_automator.utils;
 
+import ballerina/file;
 import ballerina/lang.regexp;
 import ballerina/os;
 
@@ -154,7 +155,15 @@ public function executeOpenApiTestGen(string connectorPath, string specPath) ret
         utils:logVerbose("✓ compilation errors fixed");
     }
 
-    utils:logInfo(string `✓ tests generated at ${connectorPath}/ballerina/tests/`);
+    utils:logInfo(string `✓ tests generated at ${ballerinaDir}/tests/`);
+}
+
+public function deleteTestsDirectory(string connectorPath) returns error? {
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
+    string testsDir = ballerinaDir + "/tests";
+    if check file:test(testsDir, file:EXISTS) {
+        check file:remove(testsDir, file:RECURSIVE);
+    }
 }
 
 function validateApiKey() returns error? {
