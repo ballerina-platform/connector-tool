@@ -6,7 +6,7 @@ SYNOPSIS
        bal connector openapi -i <openapi-spec> [-o <output-dir>]
                     [-x <stage>...] [--spec-dir <path>] [--example-dir <path>]
                     [--license <path>] [-t <tag>...] [--operations <id>...]
-                    [--remote] [-q | -v] [--interactive] [-h]
+                    [--remote] [-q | -v] [--interactive] [--regenerate] [-h]
 
 DESCRIPTION
        Run AI-assisted stages to sanitize an OpenAPI specification, generate
@@ -17,8 +17,13 @@ DESCRIPTION
        sanitize → client → tests → examples → docs.
 
        Use -x/--exclude to skip individual stages and run only the stages
-       you need. Already-recorded sanitations are re-applied automatically
-       at the start of each run when the sanitize stage is active.
+       you need.
+
+       Use --regenerate when updating an existing connector from a new
+       spec. The regeneration flow applies your recorded sanitations.md to the
+       new spec before alignment, fixes any compilation errors caused by API
+       changes in existing test files during the client stage (enforcing a
+       clean build), then rebuilds tests and examples from scratch.
 
 STAGES
        sanitize
@@ -81,6 +86,13 @@ OPTIONS
             Pause after each stage and prompt for confirmation before
             continuing to the next stage.
 
+       --regenerate
+            Switch to regeneration mode. Applies the existing sanitations.md
+            to the new spec before alignment, fixes compilation errors in
+            existing test files during the client stage, enforces a clean
+            build before proceeding, then deletes and fully regenerates the
+            tests and examples directories from scratch.
+
        -q, --quiet
             Suppress all output except errors.
 
@@ -105,9 +117,13 @@ EXAMPLES
                  -x sanitize -x tests -x examples -x docs \
                  --license ./license.txt -t Accounts -t Payments
 
-       Regenerate examples for an existing connector workspace.
-           $ bal connector openapi -i ./openapi.yaml -o ./out \
-                 -x sanitize -x client -x tests -x docs
+       Regenerate an existing connector from an updated spec (applies
+       sanitations.md, refreshes client, rebuilds tests and examples).
+           $ bal connector openapi -i ./new_openapi.yaml -o ./out --regenerate
+
+       Regenerate only the tests and examples (skip sanitize, client, docs).
+           $ bal connector openapi -i ./openapi.yaml -o ./out --regenerate \
+                 -x sanitize -x client -x docs
 
        Run the full pipeline with verbose output and interactive stage
        confirmation.

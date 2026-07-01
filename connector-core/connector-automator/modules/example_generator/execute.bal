@@ -156,12 +156,9 @@ function getExistingExampleDirectories(string connectorPath) returns string[]|er
     return exampleNames;
 }
 
-function cleanupExistingExamples(string connectorPath) returns error? {
-    string examplesPath = connectorPath + "/examples";
+public function cleanupExistingExamples(string examplesPath) returns error? {
     boolean examplesExist = check file:test(examplesPath, file:EXISTS);
-
     if examplesExist {
         check file:remove(examplesPath, file:RECURSIVE);
     }
-    return;
 }
