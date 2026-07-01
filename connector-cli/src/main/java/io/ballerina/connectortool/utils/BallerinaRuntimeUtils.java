@@ -64,8 +64,9 @@ public class BallerinaRuntimeUtils {
     }
 
     /**
-     * Invokes the {@code runOpenApiGenerationWorkflow} Ballerina function with the OpenAPI pipeline arguments.
+     * Invokes an OpenAPI workflow Ballerina function with the standard pipeline arguments.
      *
+     * @param functionName   the Ballerina function to invoke (e.g. {@code "runOpenApiGenerationWorkflow"})
      * @param inputPath      path to the OpenAPI specification file, or empty string when not required
      * @param outputPath     path to the Ballerina connector project
      * @param logLevel       one of {@code "quiet"}, {@code "normal"}, or {@code "verbose"}
@@ -79,7 +80,7 @@ public class BallerinaRuntimeUtils {
      * @param interactiveArg {@code "interactive"} to pause between stages, or empty string for unattended mode
      * @throws RuntimeException if the function returns a {@code BError} or an unexpected exception occurs
      */
-    public static void runOpenApiWorkflow(String inputPath, String outputPath, String logLevel,
+    public static void runOpenApiWorkflow(String functionName, String inputPath, String outputPath, String logLevel,
             String examplesDir, String excludedStages, String specDir, String license,
             String tags, String operations, String clientMethod, String interactiveArg) {
         Runtime runtime = null;
@@ -89,7 +90,7 @@ public class BallerinaRuntimeUtils {
             runtime.init();
             runtime.start();
 
-            Object result = runtime.callFunction(balModule, "runOpenApiGenerationWorkflow", null,
+            Object result = runtime.callFunction(balModule, functionName, null,
                     StringUtils.fromString(inputPath), StringUtils.fromString(outputPath),
                     StringUtils.fromString(logLevel), StringUtils.fromString(examplesDir),
                     StringUtils.fromString(excludedStages), StringUtils.fromString(specDir),
