@@ -47,6 +47,7 @@ bal connector openapi -i <spec-file> [-o <output-dir>] [options...]
 | `--license` | Path to a license header file for generated source files | No |
 | `--example-dir` | Output directory for generated examples (default: `<output>/examples`) | No |
 | `--spec-dir` | Directory for the aligned spec and `sanitations.md` (default: `<output>/docs/spec`) | No |
+| `--regenerate` | Update an existing connector from a new spec: applies `sanitations.md`, refreshes the client, then rebuilds tests and examples from scratch | No |
 | `--interactive` | Pause after each pipeline stage for manual review | No |
 | `-v`, `--verbose` | Show detailed diagnostic output | No |
 | `-q`, `--quiet` | Suppress all output except errors | No |
@@ -125,6 +126,12 @@ Generate only the client and tests, skip examples and docs:
 
 ```bash
 bal connector openapi -i ./openapi.yaml -x examples -x docs
+```
+
+Update an existing connector when the upstream API spec changes:
+
+```bash
+bal connector openapi -i ./new-openapi.yaml -o ./my-connector --regenerate
 ```
 
 Generate a connector from a Maven SDK:
