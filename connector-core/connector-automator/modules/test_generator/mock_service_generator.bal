@@ -37,7 +37,7 @@ function generateMockServerStub(string connectorPath, string specPath, string[]?
 
     utils:CommandResult result = utils:executeCommand(command, ballerinaDir);
     if !result.success {
-        return error("Failed to generate mock server stub using ballerina openAPI tool" + result.stderr);
+        return error("Failed to generate mock server stub using ballerina openAPI tool: " + result.stderr);
     }
 
     // Rename the generated service scaffold to mock_service.bal

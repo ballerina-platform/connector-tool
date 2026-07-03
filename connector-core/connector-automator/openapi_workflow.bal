@@ -177,9 +177,9 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             error? deleteResult = test_generator:deleteTestsDirectory(outputDir);
             if deleteResult is error {
                 utils:logError(string `could not remove existing tests directory: ${deleteResult.message()}`);
-            } else {
-                utils:logInfo("✓ existing tests directory removed");
+                return deleteResult;
             }
+            utils:logInfo("✓ existing tests directory removed");
         }
 
         //Generating tests.

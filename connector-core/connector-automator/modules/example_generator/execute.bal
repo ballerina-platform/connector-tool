@@ -170,7 +170,6 @@ public function cleanupExistingExamples(string examplesPath) {
             error? removeResult = file:remove(entry.absPath, file:RECURSIVE);
             if removeResult is error {
                 utils:logError(string `could not remove existing examples directory: ${removeResult.message()}`);
-                return;
             }
         }
     }
