@@ -24,7 +24,7 @@ import ballerina/lang.regexp;
 const int MAX_OPERATIONS = 30;
 const int SDK_MAX_OPERATIONS = 60;
 
-function completeMockServer(string mockServerPath, string typesPath) returns error? {
+function implementMockServer(string mockServerPath, string typesPath) returns error? {
     string mockServerContent = check io:fileReadString(mockServerPath);
     string typesContent = check io:fileReadString(typesPath);
 
@@ -32,13 +32,14 @@ function completeMockServer(string mockServerPath, string typesPath) returns err
     string completedMockServer = stripCodeFences(check utils:callAI(prompt));
     check io:fileWriteString(mockServerPath, completedMockServer);
 
-    utils:logVerbose("✓ mock server template completed");
+    utils:logVerbose("✓ mock server implementation completed");
     return;
 }
 
 function generateTestFile(string connectorPath, string[]? operationIds = ()) returns error? {
     ConnectorAnalysis analysis = check analyzeConnectorForTests(connectorPath, operationIds);
-    string testContent = stripCodeFences(check generateTestsWithAI(analysis));
+    string prompt = createTestGenerationPrompt(analysis);
+    string testContent = stripCodeFences(check utils:callAI(prompt));
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string testFilePath = ballerinaDir + "/tests/test.bal";
@@ -46,14 +47,6 @@ function generateTestFile(string connectorPath, string[]? operationIds = ()) ret
 
     utils:logVerbose(string `test file written: ${testFilePath}`);
     return;
-}
-
-function generateTestsWithAI(ConnectorAnalysis analysis) returns string|error {
-    string prompt = createTestGenerationPrompt(analysis);
-
-    string result = check utils:callAI(prompt);
-
-    return result;
 }
 
 function fixTestFileErrors(string connectorPath) returns error? {

@@ -17,8 +17,12 @@ DESCRIPTION
        sanitize → client → tests → examples → docs.
 
        Use -x/--exclude to skip individual stages and run only the stages
-       you need. Already-recorded sanitations are re-applied automatically
-       at the start of each run when the sanitize stage is active.
+       you need.
+
+       Re-running the tool on an existing connector directory automatically
+       applies any recorded sanitations.md before re-alignment, cleans up
+       stale tests and examples before regenerating them, and applies layered
+       compilation error recovery during the client stage.
 
 STAGES
        sanitize
@@ -105,9 +109,13 @@ EXAMPLES
                  -x sanitize -x tests -x examples -x docs \
                  --license ./license.txt -t Accounts -t Payments
 
-       Regenerate examples for an existing connector workspace.
+       Re-run the full pipeline on an existing connector directory (applies
+       recorded sanitations.md, cleans stale tests and examples, rebuilds).
+           $ bal connector openapi -i ./new_openapi.yaml -o ./out
+
+       Regenerate only the tests and examples (skip sanitize, client, docs).
            $ bal connector openapi -i ./openapi.yaml -o ./out \
-                 -x sanitize -x client -x tests -x docs
+                 -x sanitize -x client -x docs
 
        Run the full pipeline with verbose output and interactive stage
        confirmation.

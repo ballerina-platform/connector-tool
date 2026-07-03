@@ -145,7 +145,7 @@ public function applySanitations(
 
     boolean exists = check file:test(sanitationsPath, file:EXISTS);
     if !exists {
-        utils:logWarn("no sanitations.md found — skipping pre-sanitization step");
+        utils:logVerbose("no sanitations.md found — skipping pre-sanitization step");
         return;
     }
 
@@ -157,6 +157,11 @@ public function applySanitations(
     utils:logVerbose(string `reading sanitations from: ${sanitationsPath}`);
 
     string sanitationsContent = check io:fileReadString(sanitationsPath);
+
+    if !isSanitationsDocReady(sanitationsContent) {
+        utils:logWarn("sanitations.md appears incomplete or contains template content — skipping application");
+        return;
+    }
 
     json|error specReadResult = io:fileReadJson(newSpecPath);
     if specReadResult is error {
@@ -185,6 +190,42 @@ public function applySanitations(
     check applyRulesToSpec(newSpecPath, rules);
 
     utils:logInfo("✓ sanitations applied (rule-based)");
+}
+
+// ─────────────────────────────────────────────────────────────
+// SANITATIONS DOC VALIDATION
+// ─────────────────────────────────────────────────────────────
+
+// Asks the AI whether the sanitations doc is real and complete (no TODOs, no template text).
+// Returns true to proceed with applying, false to skip.
+// Fails open: returns true when AI is unavailable or the call fails.
+function isSanitationsDocReady(string content) returns boolean {
+    if !utils:isAIServiceInitialized() {
+        return true;
+    }
+    string prompt = string `Review the following sanitations document and determine whether it is a complete, real document ready to be applied to an OpenAPI specification.
+
+Return ONLY "true" if the document:
+- Contains real, completed sanitation entries (server URL changes, path prefix removals, format changes, etc.)
+- Has NO placeholder TODO items or unfilled template text
+- Is not empty or just a skeleton structure
+
+Return ONLY "false" if the document:
+- Contains TODO items, placeholders, or unfilled template text
+- Is empty or only a template with no actual entries
+- Appears to be a draft that has not been completed
+
+SANITATIONS DOCUMENT:
+${content}
+
+Answer with only "true" or "false".`;
+
+    string|error response = utils:callAI(prompt);
+    if response is error {
+        utils:logVerbose(string `could not validate sanitations.md — assuming valid: ${response.message()}`);
+        return true;
+    }
+    return response.trim().toLowerAscii().startsWith("true");
 }
 
 // ─────────────────────────────────────────────────────────────

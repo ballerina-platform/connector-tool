@@ -110,6 +110,13 @@ public function isAIServiceInitialized() returns boolean {
     return defaultModel !is ();
 }
 
+public function validateApiKey() returns error? {
+    string apiKey = os:getEnv("ANTHROPIC_API_KEY");
+    if apiKey.length() == 0 {
+        return error("ANTHROPIC_API_KEY not configured");
+    }
+}
+
 # Extract a JSON object string from an LLM response that may be wrapped in markdown fences.
 #
 # + responseText - Full LLM response text

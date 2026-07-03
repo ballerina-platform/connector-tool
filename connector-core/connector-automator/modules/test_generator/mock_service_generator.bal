@@ -16,77 +16,44 @@
 import wso2/connector_automator.utils;
 
 import ballerina/file;
-import ballerina/io;
-import ballerina/lang.regexp;
 
-function setupMockServerModule(string connectorPath) returns error? {
+function generateMockServerStub(string connectorPath, string specPath, string[]? selectedOperations) returns error? {
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
-
-    utils:logVerbose("adding mock.server module");
-    string command = string `bal add mock.server`;
-
-    utils:CommandResult addResult = utils:executeCommand(command, ballerinaDir);
-    if !addResult.success {
-        return error("Failed to add mock.server module" + addResult.stderr);
-    }
-    utils:logVerbose("✓ mock.server module added");
-
-    string mockTestDir = ballerinaDir + "/modules/mock.server/tests";
-    if check file:test(mockTestDir, file:EXISTS) {
-        check file:remove(mockTestDir, file:RECURSIVE);
-        utils:logVerbose("removed auto-generated tests directory");
-    }
-
-    string mockServerFile = ballerinaDir + "/modules/mock.server/mock.server.bal";
-    if check file:test(mockServerFile, file:EXISTS) {
-        check file:remove(mockServerFile, file:RECURSIVE);
-        utils:logVerbose("removed auto-generated mock.server.bal");
-    }
-}
-
-function generateMockServer(string connectorPath, string specPath) returns error? {
-    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
-    string mockServerDir = ballerinaDir + "/modules/mock.server";
-    int operationCount = check countOperationsInSpec(specPath);
-    utils:logVerbose(string `total operations in spec: ${operationCount}`);
+    string testsDir = ballerinaDir + "/tests";
 
     string absSpecPath = check file:getAbsolutePath(specPath);
-    string absMockServerDir = check file:getAbsolutePath(mockServerDir);
+    string absTestsDir = check file:getAbsolutePath(testsDir);
 
+    check file:createDir(testsDir, file:RECURSIVE);
+
+    // Generating mock server stub.
     string command;
-
-    if operationCount <= MAX_OPERATIONS {
-        utils:logVerbose(string `using all ${operationCount} operations`);
-        command = string `bal openapi -i ${absSpecPath} -o ${absMockServerDir}`;
+    if selectedOperations is () {
+        command = string `bal openapi -i ${absSpecPath} --mode service -o ${absTestsDir}`;
     } else {
-        utils:logVerbose(string `filtering from ${operationCount} to ${MAX_OPERATIONS} most useful operations`);
-        string operationsList = check selectOperationsUsingAI(specPath);
-        utils:logVerbose(string `selected operations: ${operationsList}`);
-        command = string `bal openapi -i ${absSpecPath} -o ${absMockServerDir} --operations ${operationsList}`;
+        string operationsList = string:'join(",", ...selectedOperations);
+        command = string `bal openapi -i ${absSpecPath} --mode service -o ${absTestsDir} --operations ${operationsList}`;
     }
 
     utils:CommandResult result = utils:executeCommand(command, ballerinaDir);
     if !result.success {
-        return error("Failed to generate mock server using ballerina openAPI tool" + result.stderr);
+        return error("Failed to generate mock server stub using ballerina openAPI tool: " + result.stderr);
     }
 
-    string mockServerPathOld = mockServerDir + "/aligned_ballerina_openapi_service.bal";
-    string mockServerPathNew = mockServerDir + "/mock_server.bal";
-    if check file:test(mockServerPathOld, file:EXISTS) {
-        check file:rename(mockServerPathOld, mockServerPathNew);
-        utils:logVerbose("renamed mock server file");
+    // Rename the generated service scaffold to mock_service.bal
+    string serviceFileOld = testsDir + "/aligned_ballerina_openapi_service.bal";
+    string serviceFileNew = testsDir + "/mock_service.bal";
+    if check file:test(serviceFileOld, file:EXISTS) {
+        check file:rename(serviceFileOld, serviceFileNew);
+        utils:logVerbose("renamed service file to mock_service.bal");
+    } else {
+        return error(string `bal openapi --mode service succeeded but expected scaffold not found: ${serviceFileOld}`);
     }
 
-    string clientPath = mockServerDir + "/client.bal";
-    if check file:test(clientPath, file:EXISTS) {
-        check file:remove(clientPath, file:RECURSIVE);
-        utils:logVerbose("removed client.bal");
+    // Delete duplicate types.bal
+    string serviceTypesPath = testsDir + "/types.bal";
+    if check file:test(serviceTypesPath, file:EXISTS) {
+        check file:remove(serviceTypesPath);
+        utils:logVerbose("removed generated tests/types.bal");
     }
-}
-
-function countOperationsInSpec(string specPath) returns int|error {
-    string specContent = check io:fileReadString(specPath);
-    regexp:RegExp operationIdPattern = re `"operationId"\s*:\s*"[^"]*"`;
-    regexp:Span[] matches = operationIdPattern.findAll(specContent);
-    return matches.length();
 }
