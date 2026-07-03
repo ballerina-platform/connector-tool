@@ -143,7 +143,7 @@ The method signatures are provided in <REMOTE_METHOD_SIGNATURES>. Use these exac
 `;
     } else {
         methodTypeGuidance = string `
-This connector uses resource methods. Use the resource path syntax from the mock server.
+This connector uses resource methods. Use the resource path syntax from the mock server. ONLY generate test functions for the endpoints present in ${backtick}<MOCK_SERVER_IMPLEMENTATION>${backtick} — do NOT generate tests for any endpoint visible in ${backtick}<FULL_CLIENT_IMPLEMENTATION>${backtick} that is not in the mock server, as those routes will return 404.
 `;
     }
     return string `

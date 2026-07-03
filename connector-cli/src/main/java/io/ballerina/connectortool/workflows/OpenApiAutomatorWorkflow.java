@@ -108,11 +108,6 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             description = "Pause after each stage and prompt for confirmation before continuing.")
     public boolean interactiveFlag;
 
-    @CommandLine.Option(names = {"--regenerate"},
-            description = "Regenerate an existing connector from a new spec: applies recorded sanitations, "
-                    + "refreshes the client, and rebuilds tests and examples from scratch.")
-    public boolean regenerateFlag;
-
     @Override
     public String getName() {
         return NAME;
@@ -147,9 +142,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             String clientMethodArg = remoteFlag ? "remote" : "";
             String interactiveArg = interactiveFlag ? "interactive" : "";
 
-            String functionName = regenerateFlag ? "runOpenApiRegenerationWorkflow" : "runOpenApiGenerationWorkflow";
             BallerinaRuntimeUtils.runOpenApiWorkflow(
-                    functionName,
                     openApiSpecPath != null ? openApiSpecPath.toString() : "",
                     ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir.toString(), excludedArg,
                     specDirPath.toString(), licenseArg, tagsArg, operationsArg, clientMethodArg,

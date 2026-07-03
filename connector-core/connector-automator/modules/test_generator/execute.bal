@@ -15,9 +15,7 @@
 
 import wso2/connector_automator.utils;
 
-import ballerina/file;
 import ballerina/lang.regexp;
-import ballerina/os;
 
 // Unified entry point: dispatches to OpenAPI (mock + live) or SDK (live only) test generation.
 public function executeTestGen(string workflowType, string connectorPath, string specPath) returns error? {
@@ -39,7 +37,7 @@ function executeSdkTestGen(string connectorPath, string specPath) returns error?
     utils:logVerbose(string `connector: ${connectorPath}`);
     utils:logVerbose(string `spec: ${specPath}`);
 
-    check validateApiKey();
+    check utils:validateApiKey();
 
     utils:logVerbose("initializing AI service");
     error? initResult = utils:initAIService();
@@ -92,27 +90,19 @@ public function executeOpenApiTestGen(string connectorPath, string specPath) ret
     utils:logVerbose(string `connector: ${connectorPath}`);
     utils:logVerbose(string `spec: ${specPath}`);
 
-    check validateApiKey();
-
-    utils:logVerbose("initializing AI service");
+    // AI service validation and intialization.
+    check utils:validateApiKey();
     error? initResult = utils:initAIService();
     if initResult is error {
         utils:logError(string `AI initialization failed: ${initResult.message()}`);
         return initResult;
     }
-    utils:logVerbose("✓ AI service initialized");
 
-    utils:logVerbose("generating mock server implementation");
-    error? mockGenResult = generateMockServer(connectorPath, specPath);
-    if mockGenResult is error {
-        utils:logError(string `mock server generation failed: ${mockGenResult.message()}`);
-        return mockGenResult;
-    }
-
+    // Compute operation scope.
     int operationCount = check countOperationsInSpec(specPath);
     string[]? selectedOperationIds = ();
-
     if operationCount > MAX_OPERATIONS {
+        utils:logVerbose(string `spec has ${operationCount} operations — selecting subset for test generation`);
         string operationsList = check selectOperationsUsingAI(specPath);
         string[] rawIds = regexp:split(re `,`, operationsList);
         string[] trimmedIds = [];
@@ -125,20 +115,30 @@ public function executeOpenApiTestGen(string connectorPath, string specPath) ret
         selectedOperationIds = trimmedIds;
         utils:logVerbose(string `selected ${trimmedIds.length()} operations`);
     }
-    utils:logVerbose("✓ mock server implementation generated");
+
+    // Mock server stub generation.
+    utils:logVerbose("generating mock server stub");
+    error? mockGenResult = generateMockServerStub(connectorPath, specPath, selectedOperationIds);
+    if mockGenResult is error {
+        utils:logError(string `mock server stub generation failed: ${mockGenResult.message()}`);
+        return mockGenResult;
+    }
+    utils:logVerbose("✓ mock server stub generated");
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string mockServerPath = ballerinaDir + "/tests/mock_service.bal";
     string typesPath = ballerinaDir + "/types.bal";
 
-    utils:logVerbose("completing mock server template");
-    error? completeResult = completeMockServer(mockServerPath, typesPath);
+    // Mock server implementation.
+    utils:logVerbose("implementing mock server using AI");
+    error? completeResult = implementMockServer(mockServerPath, typesPath);
     if completeResult is error {
-        utils:logError(string `mock server completion failed: ${completeResult.message()}`);
+        utils:logError(string `mock server implementation failed: ${completeResult.message()}`);
         return completeResult;
     }
-    utils:logVerbose("✓ mock server template completed");
+    utils:logVerbose("✓ mock server implemented");
 
+    // Generating tests.
     utils:logVerbose("generating test file");
     error? testGenResult = generateTestFile(connectorPath, selectedOperationIds);
     if testGenResult is error {
@@ -158,17 +158,3 @@ public function executeOpenApiTestGen(string connectorPath, string specPath) ret
     utils:logInfo(string `✓ tests generated at ${ballerinaDir}/tests/`);
 }
 
-public function deleteTestsDirectory(string connectorPath) returns error? {
-    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
-    string testsDir = ballerinaDir + "/tests";
-    if check file:test(testsDir, file:EXISTS) {
-        check file:remove(testsDir, file:RECURSIVE);
-    }
-}
-
-function validateApiKey() returns error? {
-    string apiKey = os:getEnv("ANTHROPIC_API_KEY");
-    if apiKey.length() == 0 {
-        return error("ANTHROPIC_API_KEY not configured");
-    }
-}

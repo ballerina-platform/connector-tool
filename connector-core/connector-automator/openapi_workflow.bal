@@ -47,6 +47,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     int step = 0;
 
     string sanitizedSpec = string `${specDir}/aligned_ballerina_openapi.json`;
+    string sanitationsPath = string `${specDir}/sanitations.md`;
     string clientPath = outputDir;
 
     client_generator:OpenAPIToolOptions? toolOptions = ();
@@ -71,12 +72,22 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     if excluded.indexOf("sanitize") is () {
         step += 1;
         utils:logStep(step, total, "Sanitizing OpenAPI Specification");
+
+        // Applying sanitizations.
+        error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec);
+        if applyResult is error {
+            utils:logWarn(string `could not apply recorded sanitations — continuing: ${applyResult.message()}`);
+        }
+
+        // Sanitizing the spec.
         error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, specDir);
         if sanitizeResult is error {
             utils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
             return sanitizeResult;
         }
         utils:logInfo("✓ sanitization complete");
+
+        // Generating or updating sanitizations.md.
         error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, specDir);
         if sanitationsDocResult is error {
             utils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`);
@@ -95,6 +106,8 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     if excluded.indexOf("client") is () {
         step += 1;
         utils:logStep(step, total, "Generating Ballerina Client");
+
+        // Generating client.
         error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, customOptions = toolOptions);
         if clientResult is error {
             utils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`);
@@ -103,17 +116,42 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         }
 
         utils:CommandResult buildResult = utils:executeBalBuild(clientPath);
+
+        // Trying to fix with previous runs tests if there.
         if utils:hasCompilationErrors(buildResult) {
             utils:logWarn("client has compilation errors — attempting auto-fix");
             code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(clientPath, true);
             if fixResult is code_fixer:FixResult && fixResult.errorsFixed > 0 {
                 utils:logVerbose(string `auto-fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
             }
-            utils:CommandResult revalidateResult = utils:executeBalBuild(clientPath);
-            if utils:hasCompilationErrors(revalidateResult) {
-                utils:logError("build validation failed: client still has compilation errors after auto-fix");
-                utils:logError(string `inspect the generated client at: ${clientPath}`);
-                return error(string `client build failed: ${revalidateResult.stderr}`);
+            buildResult = utils:executeBalBuild(clientPath);
+        }
+
+        if utils:hasCompilationErrors(buildResult) {
+            if excluded.indexOf("tests") is () && errorsOnlyInTestFiles(buildResult.compilationErrors) {
+                utils:logWarn("auto-fix insufficient — removing stale test files to isolate client errors");
+                string ballerinaDir = check utils:resolveBallerinaDir(clientPath);
+                error? removeTests = file:remove(ballerinaDir + "/tests", file:RECURSIVE);
+                if removeTests is error {
+                    utils:logVerbose(string `could not remove tests dir: ${removeTests.message()}`);
+                }
+                buildResult = utils:executeBalBuild(clientPath);
+                if utils:hasCompilationErrors(buildResult) {
+                    utils:logVerbose("applying final fix pass on client-only codebase");
+                    code_fixer:FixResult|code_fixer:BallerinaFixerError finalFixResult = code_fixer:fixAllErrors(clientPath, true);
+                    utils:logVerbose(string `final fix pass complete: ${finalFixResult is code_fixer:BallerinaFixerError ? "fixer error" : "ok"}`);
+                    buildResult = utils:executeBalBuild(clientPath);
+                    if utils:hasCompilationErrors(buildResult) {
+                        utils:logError("build validation failed: client has unresolvable compilation errors");
+                        utils:logError(string `inspect the generated client at: ${clientPath}`);
+                        return error(string `client build failed after all recovery attempts: ${buildResult.stderr}`);
+                    }
+                }
+                utils:logWarn("stale tests removed — tests stage will regenerate them");
+            } else {
+                utils:logError("client has unresolvable compilation errors; existing tests may conflict with the new client");
+                utils:logError("re-run without -x tests to allow test regeneration, or fix compilation errors manually");
+                return error(string `client build failed: ${buildResult.stderr}`);
             }
         }
         utils:logInfo("✓ client built and validated");
@@ -131,6 +169,20 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     if excluded.indexOf("tests") is () {
         step += 1;
         utils:logStep(step, total, "Generating Tests");
+
+        // Deleting test directory if exists.
+        string ballerinaDir = check utils:resolveBallerinaDir(outputDir);
+        string testsDir = ballerinaDir + "/tests";
+        if check file:test(testsDir, file:EXISTS) {
+            error? deleteResult = test_generator:deleteTestsDirectory(outputDir);
+            if deleteResult is error {
+                utils:logError(string `could not remove existing tests directory: ${deleteResult.message()}`);
+            } else {
+                utils:logInfo("✓ existing tests directory removed");
+            }
+        }
+
+        //Generating tests.
         error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec);
         if testResult is error {
             utils:logWarn(string `test generation failed: ${testResult.message()} — continuing`);
@@ -147,10 +199,15 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         utils:logVerbose("skipping tests (excluded)");
     }
 
-    // Stage 4: Examples
+    // Stage 4: Generating Examples
     if excluded.indexOf("examples") is () {
         step += 1;
         utils:logStep(step, total, "Generating Examples");
+
+        // Cleanup the existing examples directories if exists.
+        example_generator:cleanupExistingExamples(examplesDir);
+
+        // Generating examples.
         error? exampleResult = example_generator:executeExampleGen(outputDir, examplesDir);
         if exampleResult is error {
             utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`);
@@ -167,7 +224,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         utils:logVerbose("skipping examples (excluded)");
     }
 
-    // Stage 5: Docs (non-fatal)
+    // Stage 5: Generating Docs.tes
     if excluded.indexOf("docs") is () {
         step += 1;
         utils:logStep(step, total, "Generating Documentation");
@@ -184,214 +241,20 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     utils:logCompletion(outputDir);
 }
 
-public function runOpenApiRegenerationWorkflow(string openApiSpec, string outputDir, string logLevel,
-        string examplesDir, string excludedStages, string specDir, string license = "", string tags = "",
-        string operations = "", string clientMethod = "", string interactiveArg = "") returns error? {
-
-    utils:LogLevel level = logLevel == "quiet" ? "quiet" : logLevel == "verbose" ? "verbose" : "normal";
-    utils:initLogLevel(level);
-    boolean interactive = interactiveArg == "interactive";
-    string[] excluded = excludedStages.length() == 0 ? [] : re`,`.split(excludedStages);
-
-    utils:logVerbose(string `spec: ${openApiSpec}`);
-    utils:logVerbose(string `output: ${outputDir}`);
-    utils:logVerbose(string `spec-dir: ${specDir}`);
-    utils:logVerbose(string `examples-dir: ${examplesDir}`);
-
-    if excluded.length() > 0 {
-        utils:logInfo(string `skipping stages: ${string:'join(", ", ...excluded)}`);
+// Returns true only when every parsed compilation error originates from a test file
+// (tests/test.bal or tests/mock_service.bal). Used to decide whether removing the
+// tests/ directory can resolve remaining client build failures.
+function errorsOnlyInTestFiles(utils:CmdCompilationError[] errors) returns boolean {
+    if errors.length() == 0 {
+        return false;
     }
-
-    string[] allStages = ["sanitize", "client", "tests", "examples", "docs"];
-    int total = allStages.filter(s => excluded.indexOf(s) is ()).length();
-    int step = 0;
-
-    string sanitizedSpec = string `${specDir}/aligned_ballerina_openapi.json`;
-    string sanitationsPath = string `${specDir}/sanitations.md`;
-    string clientPath = outputDir;
-
-    client_generator:OpenAPIToolOptions? toolOptions = ();
-    if license != "" || tags != "" || operations != "" || clientMethod != "" {
-        client_generator:OpenAPIToolOptions opts = {};
-        if license != "" {
-            opts.license = license;
+    foreach utils:CmdCompilationError e in errors {
+        string f = e.fileName.toLowerAscii();
+        if !(f.includes("tests/") || f.includes("tests\\")) {
+            return false;
         }
-        if tags != "" {
-            opts.tags = re`,`.split(tags);
-        }
-        if operations != "" {
-            opts.operations = re`,`.split(operations);
-        }
-        if clientMethod != "" {
-            opts.clientMethod = clientMethod == "remote" ? "remote" : "resource";
-        }
-        toolOptions = opts;
     }
-
-    // Stage 1: Apply existing sanitations to the new spec first, then re-align and refresh sanitations.md.
-    if excluded.indexOf("sanitize") is () {
-        step += 1;
-        utils:logStep(step, total, "Applying Sanitations and Re-sanitizing OpenAPI Specification");
-        error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec);
-        if applyResult is error {
-            utils:logWarn(string `could not apply recorded sanitations — continuing: ${applyResult.message()}`);
-        } else {
-            utils:logInfo("✓ recorded sanitations applied");
-        }
-        error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, specDir);
-        if sanitizeResult is error {
-            utils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
-            return sanitizeResult;
-        }
-        utils:logInfo("✓ sanitization complete");
-        error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, specDir);
-        if sanitationsDocResult is error {
-            utils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`);
-        }
-        if interactive && step < total {
-            if !interactivePause(sanitizedSpec) {
-                utils:logInfo("Stopped at user request.");
-                return;
-            }
-        }
-    } else {
-        utils:logVerbose("skipping sanitize (excluded)");
-    }
-
-    // Stage 2: Regenerate client with layered build recovery.
-    if excluded.indexOf("client") is () {
-        step += 1;
-        utils:logStep(step, total, "Regenerating Ballerina Client");
-        error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, customOptions = toolOptions);
-        if clientResult is error {
-            utils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`);
-        } else {
-            utils:logInfo("✓ client regenerated");
-        }
-
-        utils:CommandResult buildResult = utils:executeBalBuild(clientPath);
-        if utils:hasCompilationErrors(buildResult) {
-            utils:logWarn("client has compilation errors — attempting auto-fix");
-            code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(clientPath, true);
-            if fixResult is code_fixer:FixResult && fixResult.errorsFixed > 0 {
-                utils:logVerbose(string `auto-fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
-            }
-            buildResult = utils:executeBalBuild(clientPath);
-        }
-
-        if utils:hasCompilationErrors(buildResult) {
-            // Stale test files from the prior run are likely causing the remaining failures.
-            // Remove them so we can confirm whether the client itself is valid.
-            if excluded.indexOf("tests") is () {
-                utils:logWarn("auto-fix insufficient — removing stale test files to isolate client errors");
-                string ballerinaDir = check utils:resolveBallerinaDir(clientPath);
-                error? removeTests = file:remove(ballerinaDir + "/tests", file:RECURSIVE);
-                if removeTests is error {
-                    utils:logVerbose(string `could not remove tests dir: ${removeTests.message()}`);
-                }
-                error? removeMock = file:remove(ballerinaDir + "/modules/mock.server", file:RECURSIVE);
-                if removeMock is error {
-                    utils:logVerbose(string `could not remove mock.server dir: ${removeMock.message()}`);
-                }
-                buildResult = utils:executeBalBuild(clientPath);
-                if utils:hasCompilationErrors(buildResult) {
-                    utils:logVerbose("applying final fix pass on client-only codebase");
-                    code_fixer:FixResult|code_fixer:BallerinaFixerError finalFixResult = code_fixer:fixAllErrors(clientPath, true);
-                    utils:logVerbose(string `final fix pass complete: ${finalFixResult is code_fixer:BallerinaFixerError ? "fixer error" : "ok"}`);
-                    buildResult = utils:executeBalBuild(clientPath);
-                    if utils:hasCompilationErrors(buildResult) {
-                        utils:logError("regeneration halted: client has unresolvable compilation errors");
-                        utils:logError(string `inspect the generated client at: ${clientPath}`);
-                        return error(string `client build failed after all recovery attempts: ${buildResult.stderr}`);
-                    }
-                }
-                utils:logWarn("stale tests removed — tests stage will regenerate them");
-            } else {
-                utils:logError("client has unresolvable compilation errors; existing tests may conflict with the new client");
-                utils:logError("re-run without -x tests to allow test regeneration, or fix compilation errors manually");
-                return error(string `client build failed: ${buildResult.stderr}`);
-            }
-        }
-
-        utils:logInfo("✓ client built and validated");
-        if interactive && step < total {
-            if !interactivePause(outputDir) {
-                utils:logInfo("Stopped at user request.");
-                return;
-            }
-        }
-    } else {
-        utils:logVerbose("skipping client (excluded)");
-    }
-
-    // Stage 3: Delete existing tests directory, then generate fresh tests from the new client and spec.
-    if excluded.indexOf("tests") is () {
-        step += 1;
-        utils:logStep(step, total, "Regenerating Tests");
-        error? deleteResult = test_generator:deleteTestsDirectory(outputDir);
-        if deleteResult is error {
-            utils:logWarn(string `could not remove existing tests directory: ${deleteResult.message()} — continuing`);
-        } else {
-            utils:logVerbose("✓ existing tests directory removed");
-        }
-        error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec);
-        if testResult is error {
-            utils:logWarn(string `test generation failed: ${testResult.message()} — continuing`);
-        } else {
-            utils:logInfo("✓ tests regenerated");
-        }
-        if interactive && step < total {
-            if !interactivePause(string `${outputDir}/tests/`) {
-                utils:logInfo("Stopped at user request.");
-                return;
-            }
-        }
-    } else {
-        utils:logVerbose("skipping tests (excluded)");
-    }
-
-    // Stage 4: Delete existing examples directory, then generate fresh examples.
-    if excluded.indexOf("examples") is () {
-        step += 1;
-        utils:logStep(step, total, "Regenerating Examples");
-        string resolvedExamplesDir = examplesDir.length() > 0 ? examplesDir : outputDir + "/examples";
-        error? cleanupResult = example_generator:cleanupExistingExamples(resolvedExamplesDir);
-        if cleanupResult is error {
-            utils:logWarn(string `could not remove existing examples: ${cleanupResult.message()} — continuing`);
-        } else {
-            utils:logVerbose("✓ existing examples removed");
-        }
-        error? exampleResult = example_generator:executeExampleGen(outputDir, examplesDir);
-        if exampleResult is error {
-            utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`);
-        } else {
-            utils:logInfo("✓ examples regenerated");
-        }
-        if interactive && step < total {
-            if !interactivePause(resolvedExamplesDir) {
-                utils:logInfo("Stopped at user request.");
-                return;
-            }
-        }
-    } else {
-        utils:logVerbose("skipping examples (excluded)");
-    }
-
-    // Stage 5: Docs (non-fatal)
-    if excluded.indexOf("docs") is () {
-        step += 1;
-        utils:logStep(step, total, "Generating Documentation");
-        error? docResult = document_generator:executeDocGen("generate-all", outputDir, excluded);
-        if docResult is error {
-            utils:logWarn(string `documentation generation failed: ${docResult.message()}`);
-        } else {
-            utils:logInfo("✓ documentation generated");
-        }
-    } else {
-        utils:logVerbose("skipping docs (excluded)");
-    }
-
-    utils:logCompletion(outputDir);
+    return true;
 }
 
 // Pauses the pipeline and prompts the user to review the artifact at the given path.

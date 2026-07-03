@@ -29,11 +29,12 @@ function analyzeConnectorForTests(string connectorPath, string[]? operationIds =
     // Read mock server content
     string mockServerContent = check io:fileReadString(ballerinaDir + "/tests/mock_service.bal");
 
-    // Read client.bal to extract the init method
+    // Read client.bal
     string clientContent = check io:fileReadString(ballerinaDir + "/client.bal");
+
+
     string initMethodSignature = extractInitMethodComplete(clientContent);
 
-    // Detect method type
     "resource"|"remote" methodType = check detectClientMethodType(clientContent);
 
     // Extract remote method signatures if needed and operation IDs provided

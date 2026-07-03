@@ -156,9 +156,23 @@ function getExistingExampleDirectories(string connectorPath) returns string[]|er
     return exampleNames;
 }
 
-public function cleanupExistingExamples(string examplesPath) returns error? {
-    boolean examplesExist = check file:test(examplesPath, file:EXISTS);
-    if examplesExist {
-        check file:remove(examplesPath, file:RECURSIVE);
+public function cleanupExistingExamples(string examplesPath) {
+    if file:test(examplesPath, file:EXISTS) !is true {
+        return;
     }
+    file:MetaData[]|error entries = file:readDir(examplesPath);
+    if entries is error {
+        utils:logError(string `could not read examples directory: ${entries.message()}`);
+        return;
+    }
+    foreach file:MetaData entry in entries {
+        if entry.dir {
+            error? removeResult = file:remove(entry.absPath, file:RECURSIVE);
+            if removeResult is error {
+                utils:logError(string `could not remove existing examples directory: ${removeResult.message()}`);
+                return;
+            }
+        }
+    }
+    utils:logInfo("✓ existing examples cleaned up");
 }
