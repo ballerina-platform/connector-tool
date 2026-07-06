@@ -15,9 +15,9 @@
 
 import wso2/connector_automator.utils;
 
-public function generateDescriptionsBatch(DescriptionRequest[] requests, string apiContext) returns BatchDescriptionResponse[]|LLMServiceError {
+public function generateDescriptionsBatch(DescriptionRequest[] requests, string apiContext) returns BatchDescriptionResponse[]|error {
     if !utils:isAIServiceInitialized() {
-        return error LLMServiceError("LLM service not initialized");
+        return error("LLM service not initialized");
     }
 
     if requests.length() == 0 {
@@ -85,13 +85,13 @@ REQUIRED RESPONSE FORMAT (JSON):
 
     string|error response = utils:callAI(prompt);
     if response is error {
-        return error LLMServiceError("Failed to generate batch descriptions", response);
+        return error("Failed to generate batch descriptions", response);
     }
 
     // Parse JSON response
     json|error jsonResult = response.fromJsonString();
     if jsonResult is error {
-        return error LLMServiceError("Failed to parse batch response JSON", jsonResult);
+        return error("Failed to parse batch response JSON", jsonResult);
     }
 
     if jsonResult is map<json> && jsonResult.hasKey("descriptions") {
@@ -114,13 +114,13 @@ REQUIRED RESPONSE FORMAT (JSON):
             return results;
         }
     }
-    return error LLMServiceError("Invalid batch response format");
+    return error("Invalid batch response format");
 }
 
 // Process multiple operationId requests in a single LLM call
-public function generateOperationIdsBatch(OperationIdRequest[] requests, string apiContext, string[] existingOperationIds) returns BatchOperationIdResponse[]|LLMServiceError {
+public function generateOperationIdsBatch(OperationIdRequest[] requests, string apiContext, string[] existingOperationIds) returns BatchOperationIdResponse[]|error {
     if !utils:isAIServiceInitialized() {
-        return error LLMServiceError("LLM service not initialized");
+        return error("LLM service not initialized");
     }
 
     if requests.length() == 0 {
@@ -131,10 +131,12 @@ public function generateOperationIdsBatch(OperationIdRequest[] requests, string 
     foreach int i in 0 ..< requests.length() {
         OperationIdRequest req = requests[i];
         string tags = req.tags is string[] ? string:'join(", ", ...<string[]>req.tags) : "N/A";
+        string currentId = req.currentOperationId ?: "N/A (not yet assigned)";
         requestsSection += string `
 ${i + 1}. ID: ${req.id}
    Path: ${req.path}
    Method: ${req.method.toUpperAscii()}
+   Current operationId: ${currentId}
    Summary: ${req.summary ?: "N/A"}
    Description: ${req.description ?: "N/A"}
    Tags: ${tags}
@@ -143,20 +145,22 @@ ${i + 1}. ID: ${req.id}
 
     string existingIdsStr = string:'join(", ", ...existingOperationIds);
 
-    string prompt = string `You are an expert in REST API design. Generate meaningful, unique camelCase operationIds for these API operations.
+    string prompt = string `You are an expert in REST API design. Generate or improve operationIds for these API operations, producing concise, intent-revealing camelCase names.
 
 API CONTEXT:
 ${apiContext}
 
-EXISTING OPERATION IDS (avoid conflicts):
+EXISTING OPERATION IDS (must not conflict):
 ${existingIdsStr}
 
-OPERATIONS TO NAME:
+OPERATIONS TO NAME OR IMPROVE:
 ${requestsSection}
 
 REQUIREMENTS:
 - Use camelCase (e.g., getUserProfile, createPlaylist, updateUserSettings)
 - Be descriptive and follow REST conventions (get*, create*, update*, delete*, list*)
+- If "Current operationId" is verbose or path-encoded (e.g., postFilesV3FilesUpload), replace it with a concise intent-revealing name (e.g., uploadFile)
+- If "Current operationId" is already concise and intent-revealing, keep it unchanged
 - Ensure operationIds are unique and don't conflict with existing ones
 - Consider HTTP method, path, and operation purpose
 - Keep names concise but clear (prefer verbs + nouns)
@@ -178,12 +182,12 @@ REQUIRED RESPONSE FORMAT (JSON):
 
     string|error response = utils:callAI(prompt);
     if response is error {
-        return error LLMServiceError("Failed to generate batch operationIds", response);
+        return error("Failed to generate batch operationIds", response);
     }
 
     json|error jsonResult = response.fromJsonString();
     if jsonResult is error {
-        return error LLMServiceError("Failed to parse batch operationId response JSON", jsonResult);
+        return error("Failed to parse batch operationId response JSON", jsonResult);
     }
 
     if jsonResult is map<json> && jsonResult.hasKey("operationIds") {
@@ -202,12 +206,12 @@ REQUIRED RESPONSE FORMAT (JSON):
             return results;
         }
     }
-    return error LLMServiceError("Invalid batch operationId response format");
+    return error("Invalid batch operationId response format");
 }
 
-public function generateSchemaNamesBatch(SchemaRenameRequest[] requests, string apiContext, string[] existingNames) returns BatchRenameResponse[]|LLMServiceError {
+public function generateSchemaNamesBatch(SchemaRenameRequest[] requests, string apiContext, string[] existingNames) returns BatchRenameResponse[]|error {
     if !utils:isAIServiceInitialized() {
-        return error LLMServiceError("LLM service not initialized");
+        return error("LLM service not initialized");
     }
 
     if requests.length() == 0 {
@@ -260,12 +264,12 @@ REQUIRED RESPONSE FORMAT (JSON):
 
     string|error response = utils:callAI(prompt);
     if response is error {
-        return error LLMServiceError("Failed to generate batch schema names", response);
+        return error("Failed to generate batch schema names", response);
     }
 
     json|error jsonResult = response.fromJsonString();
     if jsonResult is error {
-        return error LLMServiceError("Failed to parse batch rename response JSON", jsonResult);
+        return error("Failed to parse batch rename response JSON", jsonResult);
     }
 
     if jsonResult is map<json> && jsonResult.hasKey("renames") {
@@ -284,5 +288,5 @@ REQUIRED RESPONSE FORMAT (JSON):
             return results;
         }
     }
-    return error LLMServiceError("Invalid batch rename response format");
+    return error("Invalid batch rename response format");
 }

@@ -21,12 +21,14 @@ import ballerina/lang.runtime;
 
 configurable RetryConfig retryConfig = {};
 
-public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests, string apiContext, RetryConfig? config = ()) returns BatchDescriptionResponse[]|LLMServiceError {
+const int OPERATION_ID_BATCH_SIZE = 15;
+
+public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests, string apiContext, RetryConfig? config = ()) returns BatchDescriptionResponse[]|error {
     RetryConfig retryConf = config ?: retryConfig;
 
     int attempt = 0;
     while attempt <= retryConf.maxRetries {
-        BatchDescriptionResponse[]|LLMServiceError result = generateDescriptionsBatch(requests, apiContext);
+        BatchDescriptionResponse[]|error result = generateDescriptionsBatch(requests, apiContext);
 
         if result is BatchDescriptionResponse[] {
             if attempt > 0 {
@@ -51,15 +53,15 @@ public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests
         }
     }
 
-    return error LLMServiceError("Unexpected error in retry logic");
+    return error("Unexpected error in retry logic");
 }
 
-public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests, string apiContext, string[] existingOperationIds, RetryConfig? config = ()) returns BatchOperationIdResponse[]|LLMServiceError {
+public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests, string apiContext, string[] existingOperationIds, RetryConfig? config = ()) returns BatchOperationIdResponse[]|error {
     RetryConfig retryConf = config ?: retryConfig;
 
     int attempt = 0;
     while attempt <= retryConf.maxRetries {
-        BatchOperationIdResponse[]|LLMServiceError result = generateOperationIdsBatch(requests, apiContext, existingOperationIds);
+        BatchOperationIdResponse[]|error result = generateOperationIdsBatch(requests, apiContext, existingOperationIds);
 
         if result is BatchOperationIdResponse[] {
             if attempt > 0 {
@@ -84,15 +86,15 @@ public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests
         }
     }
 
-    return error LLMServiceError("Unexpected error in retry logic");
+    return error("Unexpected error in retry logic");
 }
 
-public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests, string apiContext, string[] existingNames, RetryConfig? config = ()) returns BatchRenameResponse[]|LLMServiceError {
+public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests, string apiContext, string[] existingNames, RetryConfig? config = ()) returns BatchRenameResponse[]|error {
     RetryConfig retryConf = config ?: retryConfig;
 
     int attempt = 0;
     while attempt <= retryConf.maxRetries {
-        BatchRenameResponse[]|LLMServiceError result = generateSchemaNamesBatch(requests, apiContext, existingNames);
+        BatchRenameResponse[]|error result = generateSchemaNamesBatch(requests, apiContext, existingNames);
 
         if result is BatchRenameResponse[] {
             if attempt > 0 {
@@ -117,20 +119,19 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
         }
     }
 
-    return error LLMServiceError("Unexpected error in retry logic");
+    return error("Unexpected error in retry logic");
 }
 
-public function addMissingDescriptionsBatchWithRetry(string specFilePath, int batchSize = 20, RetryConfig? config = ()) returns DescriptionEnhancementResult|LLMServiceError {
-    utils:logVerbose(string `processing spec for missing descriptions: ${specFilePath} (batch size ${batchSize})`);
+public function addMissingDescriptionsBatchWithRetry(string specFilePath, int OPERATION_ID_BATCH_SIZE = 20, RetryConfig? config = ()) returns DescriptionEnhancementResult|error {
+    utils:logVerbose(string `processing spec for missing descriptions: ${specFilePath} (batch size ${OPERATION_ID_BATCH_SIZE})`);
 
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
-        return error LLMServiceError("Failed to read OpenAPI spec file", specResult);
+        return error("Failed to read OpenAPI spec file", specResult);
     }
 
     json specJson = specResult;
     int descriptionsAdded = 0;
-    int summariesAdded = 0;
 
     if specJson is map<json> {
         map<json> specMap = <map<json>>specJson;
@@ -157,23 +158,22 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
 
         collectParameterDescriptionRequests(specJson, allRequests, requestToLocationMap);
         collectOperationDescriptionRequests(specJson, allRequests, requestToLocationMap);
-        collectOperationSummaryRequests(specJson, allRequests, requestToLocationMap);
 
         int totalRequests = allRequests.length();
         utils:logVerbose(string `collected ${totalRequests} description requests`);
 
         int startIdx = 0;
         while startIdx < totalRequests {
-            int endIdx = startIdx + batchSize;
+            int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
             if endIdx > totalRequests {
                 endIdx = totalRequests;
             }
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
-            int batchNum = (startIdx / batchSize) + 1;
+            int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
             utils:logVerbose(string `processing descriptions batch ${batchNum} (${batch.length()} items)`);
 
-            BatchDescriptionResponse[]|LLMServiceError batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
+            BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
             if batchResult is BatchDescriptionResponse[] {
                 utils:logVerbose(string `batch ${batchNum} complete (${batchResult.length()} descriptions)`);
 
@@ -181,7 +181,6 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
                     string? location = requestToLocationMap[response.id];
                     if location is string {
                         error? updateResult = ();
-                        boolean isSummaryUpdate = false;
 
                         if location.startsWith("paths.") && location.includes("parameters[name=") {
                             json|error pathsResult = specMap.get("paths");
@@ -192,12 +191,6 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
                             json|error pathsResult = specMap.get("paths");
                             if pathsResult is map<json> {
                                 updateResult = updateResponseDescriptionInSpec(<map<json>>pathsResult, location, response.description);
-                            }
-                        } else if location.startsWith("paths.") && location.endsWith(".summary") {
-                            isSummaryUpdate = true;
-                            json|error pathsResult = specMap.get("paths");
-                            if pathsResult is map<json> {
-                                updateResult = updateOperationSummaryInSpec(<map<json>>pathsResult, location, response.description);
                             }
                         } else if location.startsWith("paths.") && !location.includes(".properties.") && !location.includes(".responses.") {
                             json|error pathsResult = specMap.get("paths");
@@ -215,11 +208,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
                         }
 
                         if updateResult is () {
-                            if isSummaryUpdate {
-                                summariesAdded += 1;
-                            } else {
-                                descriptionsAdded += 1;
-                            }
+                            descriptionsAdded += 1;
                         } else {
                             utils:logError(string `failed to apply description for ${response.id}: ${updateResult.message()}`);
                         }
@@ -228,48 +217,120 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
             } else {
                 utils:logError(string `descriptions batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
-            startIdx += batchSize;
+            startIdx += OPERATION_ID_BATCH_SIZE;
         }
     }
 
     string|error prettifiedResult = jsondata:prettify(specJson);
     if prettifiedResult is error {
-        return error LLMServiceError("Failed to prettify JSON", prettifiedResult);
+        return error("Failed to prettify JSON", prettifiedResult);
     }
 
     error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
     if writeResult is error {
-        return error LLMServiceError("Failed to write updated OpenAPI spec", writeResult);
+        return error("Failed to write updated OpenAPI spec", writeResult);
     }
 
-    return {descriptionsAdded: descriptionsAdded, summariesAdded: summariesAdded};
+    return {descriptionsAdded: descriptionsAdded, summariesAdded: 0};
 }
 
-public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, int batchSize = 10, RetryConfig? config = ()) returns int|LLMServiceError {
+public function improveOperationSummariesBatchWithRetry(string specFilePath, int OPERATION_ID_BATCH_SIZE = 20, RetryConfig? config = ()) returns int|error {
+    utils:logVerbose(string `processing spec for operation summaries: ${specFilePath} (batch size ${OPERATION_ID_BATCH_SIZE})`);
+
+    json|error specResult = io:fileReadJson(specFilePath);
+    if specResult is error {
+        return error("Failed to read OpenAPI spec file", specResult);
+    }
+
+    json specJson = specResult;
+    int summariesImproved = 0;
+
+    if specJson is map<json> {
+        map<json> specMap = <map<json>>specJson;
+        string apiContext = extractApiContext(specJson);
+
+        DescriptionRequest[] allRequests = [];
+        map<string> requestToLocationMap = {};
+
+        collectOperationSummaryRequests(specJson, allRequests, requestToLocationMap);
+
+        int totalRequests = allRequests.length();
+        utils:logVerbose(string `collected ${totalRequests} summary requests`);
+
+        int startIdx = 0;
+        while startIdx < totalRequests {
+            int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
+            if endIdx > totalRequests {
+                endIdx = totalRequests;
+            }
+
+            DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
+            int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
+            utils:logVerbose(string `processing summaries batch ${batchNum} (${batch.length()} items)`);
+
+            BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
+            if batchResult is BatchDescriptionResponse[] {
+                utils:logVerbose(string `batch ${batchNum} complete (${batchResult.length()} summaries)`);
+
+                foreach BatchDescriptionResponse response in batchResult {
+                    string? location = requestToLocationMap[response.id];
+                    if location is string {
+                        json|error pathsResult = specMap.get("paths");
+                        if pathsResult is map<json> {
+                            error? updateResult = updateOperationSummaryInSpec(<map<json>>pathsResult, location, response.description);
+                            if updateResult is () {
+                                summariesImproved += 1;
+                            } else {
+                                utils:logError(string `failed to apply summary for ${response.id}: ${updateResult.message()}`);
+                            }
+                        }
+                    }
+                }
+            } else {
+                utils:logError(string `summaries batch ${batchNum} failed after all retries: ${batchResult.message()}`);
+            }
+            startIdx += OPERATION_ID_BATCH_SIZE;
+        }
+    }
+
+    string|error prettifiedResult = jsondata:prettify(specJson);
+    if prettifiedResult is error {
+        return error("Failed to prettify JSON", prettifiedResult);
+    }
+
+    error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
+    if writeResult is error {
+        return error("Failed to write updated OpenAPI spec", writeResult);
+    }
+
+    return summariesImproved;
+}
+
+public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, int OPERATION_ID_BATCH_SIZE = 10, RetryConfig? config = ()) returns int|error {
     utils:logVerbose(string `processing spec to rename InlineResponse schemas: ${specFilePath}`);
 
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
-        return error LLMServiceError("Failed to read OpenAPI spec file", specResult);
+        return error("Failed to read OpenAPI spec file", specResult);
     }
 
     json specJson = specResult;
 
     if !(specJson is map<json>) {
-        return error LLMServiceError("Invalid OpenAPI spec format");
+        return error("spec is not a valid JSON object");
     }
 
     map<json> specMap = <map<json>>specJson;
 
     json|error componentsResult = specMap.get("components");
     if !(componentsResult is map<json>) {
-        return error LLMServiceError("No components section found in OpenAPI spec");
+        return error("No components section found in OpenAPI spec");
     }
 
     map<json> components = <map<json>>componentsResult;
     json|error schemasResult = components.get("schemas");
     if !(schemasResult is map<json>) {
-        return error LLMServiceError("No schemas section found in components");
+        return error("No schemas section found in components");
     }
 
     map<json> schemas = <map<json>>schemasResult;
@@ -312,16 +373,16 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
 
     int startIdx = 0;
     while startIdx < totalRequests {
-        int endIdx = startIdx + batchSize;
+        int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
         if endIdx > totalRequests {
             endIdx = totalRequests;
         }
 
         SchemaRenameRequest[] batch = renameRequests.slice(startIdx, endIdx);
-        int batchNum = (startIdx / batchSize) + 1;
+        int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
         utils:logVerbose(string `processing schema rename batch ${batchNum} (${batch.length()} schemas)`);
 
-        BatchRenameResponse[]|LLMServiceError batchResult = generateSchemaNamesBatchWithRetry(batch, apiContext, allExistingNames, config);
+        BatchRenameResponse[]|error batchResult = generateSchemaNamesBatchWithRetry(batch, apiContext, allExistingNames, config);
         if batchResult is BatchRenameResponse[] {
             utils:logVerbose(string `schema rename batch ${batchNum} complete (${batchResult.length()} schemas)`);
 
@@ -367,7 +428,7 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
             utils:logError(string `schema rename batch ${batchNum} failed after all retries: ${batchResult.message()}`);
         }
 
-        startIdx += batchSize;
+        startIdx += OPERATION_ID_BATCH_SIZE;
     }
 
     if (nameMapping.length() > 0) {
@@ -393,102 +454,155 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
 
         string|error prettifiedResult = jsondata:prettify(updatedSpecResult);
         if prettifiedResult is error {
-            return error LLMServiceError("Failed to prettify JSON", prettifiedResult);
+            return error("Failed to prettify JSON", prettifiedResult);
         }
 
         error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
         if writeResult is error {
-            return error LLMServiceError("Failed to write updated OpenAPI spec", writeResult);
+            return error("Failed to write updated OpenAPI spec", writeResult);
         }
     }
 
     return renamedCount;
 }
 
-public function addMissingOperationIdsBatchWithRetry(string specFilePath, int batchSize = 15, RetryConfig? config = ()) returns int|LLMServiceError {
-    utils:logVerbose(string `processing spec for missing operationIds: ${specFilePath}`);
+public function improveOperationIds(string specFilePath, map<map<string>>? priorOperationIds) returns int|error {
+    
+    utils:logVerbose(string `processing spec for operationId improvement: ${specFilePath}`);
 
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
-        return error LLMServiceError("Failed to read OpenAPI spec file", specResult);
+        return error("Failed to read OpenAPI spec file", specResult);
     }
-
     json specJson = specResult;
-
     if !(specJson is map<json>) {
-        return error LLMServiceError("Invalid OpenAPI spec format");
+        return error("spec is not a valid JSON object");
     }
-
     map<json> specMap = <map<json>>specJson;
 
     json|error pathsResult = specMap.get("paths");
     if !(pathsResult is map<json>) {
-        return error LLMServiceError("No paths section found in OpenAPI spec");
+        return error("No paths section found in OpenAPI spec");
     }
-
     map<json> paths = <map<json>>pathsResult;
-
-    string[] existingOperationIds = [];
-    collectExistingOperationIds(paths, existingOperationIds);
-
-    OperationIdRequest[] missingOperationIds = [];
-    map<string> requestToLocationMap = {};
-
     string apiContext = extractApiContext(specMap);
-    collectMissingOperationIdRequests(paths, missingOperationIds, requestToLocationMap, apiContext);
 
-    int totalRequests = missingOperationIds.length();
-    if totalRequests == 0 {
-        utils:logVerbose("no missing operationIds found");
-        return 0;
-    }
-
-    utils:logVerbose(string `collected ${totalRequests} missing operationId requests`);
-
-    int operationIdsAdded = 0;
-
-    int startIdx = 0;
-    while startIdx < totalRequests {
-        int endIdx = startIdx + batchSize;
-        if endIdx > totalRequests {
-            endIdx = totalRequests;
-        }
-
-        OperationIdRequest[] batch = missingOperationIds.slice(startIdx, endIdx);
-        int batchNum = (startIdx / batchSize) + 1;
-        utils:logVerbose(string `processing operationId batch ${batchNum} (${batch.length()} operations)`);
-
-        BatchOperationIdResponse[]|LLMServiceError batchResult = generateOperationIdsBatchWithRetry(batch, apiContext, existingOperationIds, config);
-        if batchResult is BatchOperationIdResponse[] {
-            utils:logVerbose(string `operationId batch ${batchNum} complete (${batchResult.length()} operations)`);
-
-            foreach BatchOperationIdResponse response in batchResult {
-                string? location = requestToLocationMap[response.id];
-                if location is string {
-                    error? updateResult = updateOperationIdInSpec(paths, location, response.operationId);
-                    if updateResult is () {
-                        existingOperationIds.push(response.operationId);
-                        operationIdsAdded += 1;
-                    } else {
-                        utils:logError(string `failed to apply operationId for ${response.id}: ${updateResult.message()}`);
+    // Pass A: Deterministic restoration from prior map.
+    int reuseCount = 0;
+    if priorOperationIds is map<map<string>> {
+        string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
+        foreach string path in paths.keys() {
+            json|error pathItem = paths.get(path);
+            if pathItem is map<json> {
+                map<json> pathItemMap = <map<json>>pathItem;
+                foreach string method in httpMethods {
+                    if pathItemMap.hasKey(method) {
+                        map<string>? methodMap = priorOperationIds[path];
+                        string? priorId = methodMap is map<string> ? methodMap[method] : ();
+                        if priorId is string {
+                            error? updateResult = updateOperationIdInSpec(paths, path, method, priorId);
+                            if updateResult is () {
+                                reuseCount += 1;
+                            } else {
+                                utils:logError(string `failed to restore operationId for ${method} ${path}: ${updateResult.message()}`);
+                            }
+                        }
                     }
                 }
             }
-        } else {
-            utils:logError(string `operationId batch ${batchNum} failed after all retries: ${batchResult.message()}`);
         }
-        startIdx += batchSize;
+        if reuseCount > 0 {
+            utils:logInfo(string `  ✓ reused ${reuseCount} operationId${reuseCount == 1 ? "" : "s"} from previous run`);
+        }
+    }
+
+    // Collect all current operationIds (including those just restored in Pass A) as reserved names
+    string[] existingOperationIds = [];
+    collectExistingOperationIds(paths, existingOperationIds, priorOperationIds);
+
+    // Pass B: AI improvement for operations not covered by Pass A
+    OperationIdRequest[] requests = [];
+    map<OperationLocation> requestToLocationMap = {};
+    collectOperationIdRequests(paths, requests, requestToLocationMap, apiContext, priorOperationIds);
+
+    int totalRequests = requests.length();
+    int aiImproved = 0;
+    if totalRequests == 0 {
+        utils:logVerbose("no operations to improve with AI");
+    } else {
+        utils:logVerbose(string `collected ${totalRequests} operationId improvement request${totalRequests == 1 ? "" : "s"}`);
+
+        int startIdx = 0;
+        while startIdx < totalRequests {
+            int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
+            if endIdx > totalRequests { endIdx = totalRequests; }
+            OperationIdRequest[] batch = requests.slice(startIdx, endIdx);
+            int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
+            utils:logVerbose(string `processing operationId batch ${batchNum} (${batch.length()} operations)`);
+
+            BatchOperationIdResponse[]|error batchResult = generateOperationIdsBatchWithRetry(batch, apiContext, existingOperationIds);
+            if batchResult is BatchOperationIdResponse[] {
+                utils:logVerbose(string `operationId batch ${batchNum} complete (${batchResult.length()} operations)`);
+                foreach BatchOperationIdResponse response in batchResult {
+                    OperationLocation? loc = requestToLocationMap[response.id];
+                    if loc is OperationLocation {
+                        error? updateResult = updateOperationIdInSpec(paths, loc.path, loc.method, response.operationId);
+                        if updateResult is () {
+                            existingOperationIds.push(response.operationId);
+                            aiImproved += 1;
+                        } else {
+                            utils:logError(string `failed to apply operationId for ${response.id}: ${updateResult.message()}`);
+                        }
+                    }
+                }
+            } else {
+                utils:logError(string `operationId batch ${batchNum} failed after all retries: ${batchResult.message()}`);
+            }
+            startIdx += OPERATION_ID_BATCH_SIZE;
+        }
+    }
+
+    // Uniqueness guard: warn on duplicate operationIds (client gen will also surface them)
+    map<string[]> seenIds = {};
+    string[] httpMethodsCheck = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
+    foreach string path in paths.keys() {
+        json|error pathItem = paths.get(path);
+        if pathItem is map<json> {
+            map<json> pathItemMap = <map<json>>pathItem;
+            foreach string method in httpMethodsCheck {
+                if pathItemMap.hasKey(method) {
+                    json|error operationResult = pathItemMap.get(method);
+                    if operationResult is map<json> {
+                        map<json> operation = <map<json>>operationResult;
+                        if operation.hasKey("operationId") {
+                            json|error opIdResult = operation.get("operationId");
+                            if opIdResult is string {
+                                string opId = <string>opIdResult;
+                                string[] locs = seenIds[opId] ?: [];
+                                locs.push(string `${method.toUpperAscii()} ${path}`);
+                                seenIds[opId] = locs;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    foreach string opId in seenIds.keys() {
+        string[] locs = seenIds[opId] ?: [];
+        if locs.length() > 1 {
+            utils:logWarn(string `duplicate operationId "${opId}" at: ${string:'join(", ", ...locs)}`);
+        }
     }
 
     string|error prettifiedResult = jsondata:prettify(specJson);
     if prettifiedResult is error {
-        return error LLMServiceError("Failed to prettify JSON", prettifiedResult);
+        return error("Failed to prettify JSON", prettifiedResult);
     }
-
     error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
     if writeResult is error {
-        return error LLMServiceError("Failed to write updated OpenAPI spec", writeResult);
+        return error("Failed to write updated OpenAPI spec", writeResult);
     }
 
-    return operationIdsAdded;
+    return aiImproved;
 }
