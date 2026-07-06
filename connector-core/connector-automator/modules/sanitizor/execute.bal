@@ -41,9 +41,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     error? llmInitResult = utils:initAIService();
     if llmInitResult is error {
-        utils:logWarn(string `AI service not available — only programmatic fixes will be applied (${llmInitResult.message()})`);
-    } else {
-        utils:logVerbose("✓ AI service initialized");
+        return error("AI service initialization failed — cannot run sanitization", llmInitResult);
     }
 
     // Step 1: Flatten
