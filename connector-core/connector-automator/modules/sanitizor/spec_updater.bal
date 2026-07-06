@@ -188,14 +188,9 @@ function updateOperationSummaryInSpec(map<json> paths, string location, string s
                     if operation is map<json> {
                         map<json> operationMap = <map<json>>operation;
 
-                        // Defensive hard cap: 37 characters, regardless of AI prompt compliance.
-                        // Also strip any trailing period before capping.
                         string cappedSummary = summary.trim();
                         if cappedSummary.endsWith(".") {
                             cappedSummary = cappedSummary.substring(0, cappedSummary.length() - 1).trim();
-                        }
-                        if cappedSummary.length() > 37 {
-                            cappedSummary = cappedSummary.substring(0, 37);
                         }
 
                         operationMap["summary"] = cappedSummary;

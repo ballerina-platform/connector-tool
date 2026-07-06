@@ -707,7 +707,7 @@ function collectOperationSummaryRequests(json spec, DescriptionRequest[] request
                                             !existingSummary.includes("\n") {
                                         // Single token (e.g. "Read", "Archive") — too terse to be useful
                                         needsSummary = true;
-                                    } else if existingSummary.length() > 37 {
+                                    } else if existingSummary.length() > DISPLAY_NAME_MAX_LENGTH {
                                         // Already descriptive, but exceeds the hard UI cap — condense it
                                         needsSummary = true;
                                         tooLong = true;

@@ -15,6 +15,8 @@
 
 import wso2/connector_automator.utils;
 
+const int DISPLAY_NAME_MAX_LENGTH = 37;
+
 public function generateDescriptionsBatch(DescriptionRequest[] requests, string apiContext) returns BatchDescriptionResponse[]|error {
     if !utils:isAIServiceInitialized() {
         return error("LLM service not initialized");
@@ -59,8 +61,8 @@ INSTRUCTIONS:
 2. For PARAMETER descriptions: Explain the parameter's purpose (under 100 characters)
 3. For OPERATION descriptions: Describe what the operation returns (under 120 characters, suitable for return parameter docs)
 4. For OPERATION SUMMARY: Produce a short imperative-verb action phrase suitable as a one-line doc comment. Rules (all mandatory, no exceptions):
-   a) HARD LIMIT: 37 characters total — count every character including spaces before you respond.
-   b) The phrase MUST be complete: it must end at a natural sentence or clause boundary — never mid-word and never mid-sentence. If your draft exceeds 37 characters, shorten the idea (drop qualifiers, use a shorter synonym, simplify the verb object) until the entire phrase fits within 37 characters as a finished thought.
+   a) HARD LIMIT: ${DISPLAY_NAME_MAX_LENGTH} characters total — count every character including spaces before you respond.
+   b) The phrase MUST be complete: it must end at a natural sentence or clause boundary — never mid-word and never mid-sentence. If your draft exceeds ${DISPLAY_NAME_MAX_LENGTH} characters, shorten the idea (drop qualifiers, use a shorter synonym, simplify the verb object) until the entire phrase fits within ${DISPLAY_NAME_MAX_LENGTH} characters as a finished thought.
    c) Use an imperative verb phrase, e.g. "Retrieve a contact by ID" or "List all active deals". Do not restate the operationId verbatim.
    d) If the context provides an existing summary marked as "too long", condense that exact summary to fit the limit while preserving its meaning — do not invent unrelated wording.
 5. Use professional API documentation language
@@ -164,6 +166,7 @@ REQUIREMENTS:
 - Ensure operationIds are unique and don't conflict with existing ones
 - Consider HTTP method, path, and operation purpose
 - Keep names concise but clear (prefer verbs + nouns)
+- HARD LIMIT: ${DISPLAY_NAME_MAX_LENGTH} characters for the camelCase operationId — it is rendered as a spaced display label in low-code environments (e.g. getUserProfile → "Get User Profile"), so brevity matters. If you cannot fit within the limit, drop qualifiers or simplify the verb-object rather than truncating mid-word.
 - Do not include fenced code blocks in the response
 
 REQUIRED RESPONSE FORMAT (JSON):
