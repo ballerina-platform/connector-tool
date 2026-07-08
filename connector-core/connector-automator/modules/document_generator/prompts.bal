@@ -652,3 +652,75 @@ Available Example Directories: ${metadata.examples.toString()}
 Generate the complete examples/README.md now.
 `;
 }
+
+function createKeywordGenerationPrompt(ConnectorMetadata metadata) returns string {
+    string existingHint = metadata.existingKeywords.length() > 0
+        ? string `The connector currently has these keywords: ${metadata.existingKeywords.toString()}. Preserve any conformant Cost/* and Vendor/* values if they are correct.`
+        : "The connector has no existing keywords.";
+
+    string descriptionHint = metadata.description is string
+        ? string `Description from Ballerina.toml: ${<string>metadata.description}`
+        : "No description available.";
+
+    return string `You are a metadata specialist for Ballerina connectors published to Ballerina Central.
+
+Your task is to generate the correct ${backtick}keywords${backtick} array for a connector's ${backtick}Ballerina.toml${backtick}.
+
+---
+
+## STRICT RULES — follow exactly, no exceptions
+
+### Cost/* — pick EXACTLY ONE:
+- ${backtick}Cost/Free${backtick} — completely free, no meaningful usage limits (e.g. Gmail, Discord, Google Sheets)
+- ${backtick}Cost/Freemium${backtick} — free tier exists; paid plans unlock more (e.g. Salesforce, GitHub, Jira, Slack)
+- ${backtick}Cost/Paid${backtick} — no meaningful free tier; paid subscription required (e.g. Twilio, SAP, Snowflake)
+
+### Vendor/* — pick EXACTLY ONE:
+Use the vendor's proper public brand name. Examples: ${backtick}Vendor/Salesforce${backtick}, ${backtick}Vendor/Slack${backtick}, ${backtick}Vendor/OpenAI${backtick}, ${backtick}Vendor/Google${backtick}, ${backtick}Vendor/Microsoft${backtick}, ${backtick}Vendor/Amazon${backtick}, ${backtick}Vendor/Stripe${backtick}, ${backtick}Vendor/HubSpot${backtick}, ${backtick}Vendor/Twilio${backtick}, ${backtick}Vendor/GitHub${backtick}, ${backtick}Vendor/Atlassian${backtick}, ${backtick}Vendor/SAP${backtick}, etc. For multi-product suites use the parent brand.
+
+### Area/* — pick EXACTLY ONE from this list (no other values allowed):
+- ${backtick}Area/CRM & Sales${backtick}
+- ${backtick}Area/Marketing & Social Media${backtick}
+- ${backtick}Area/Communication${backtick}
+- ${backtick}Area/Productivity & Collaboration${backtick}
+- ${backtick}Area/Finance & Accounting${backtick}
+- ${backtick}Area/E-Commerce${backtick}
+- ${backtick}Area/ERP & Business Operations${backtick}
+- ${backtick}Area/HRMS${backtick}
+- ${backtick}Area/Developer Tools${backtick}
+- ${backtick}Area/Database${backtick}
+- ${backtick}Area/Messaging${backtick}
+- ${backtick}Area/Storage & File Management${backtick}
+- ${backtick}Area/AI & Machine Learning${backtick}
+- ${backtick}Area/Cloud & Infrastructure${backtick}
+- ${backtick}Area/Security & Identity${backtick}
+- ${backtick}Area/Other${backtick}
+
+IMPORTANT: Do NOT use ${backtick}Area/AI${backtick}, ${backtick}Area/CRM${backtick}, ${backtick}Area/Finance${backtick}, or ${backtick}Area/Productivity${backtick} — these are incorrect shorthand forms. Always use the full canonical name from the list above.
+
+### Type/* — ALWAYS exactly:
+- ${backtick}Type/Connector${backtick}
+
+This is a connector tool. Do NOT add ${backtick}Type/Trigger${backtick}, ${backtick}Type/Driver${backtick}, ${backtick}Type/Library${backtick}, or any other type. The output must contain ${backtick}Type/Connector${backtick} and nothing else for this dimension.
+
+---
+
+## OUTPUT FORMAT
+
+Respond with ONLY a JSON array — no prose, no markdown, no explanation:
+["Cost/...", "Vendor/...", "Area/...", "Type/Connector"]
+
+---
+
+## CONNECTOR INFORMATION
+
+Connector name: ${metadata.connectorName}
+${descriptionHint}
+${existingHint}
+
+client.bal content (first 3000 chars):
+${metadata.clientBalContent.length() > 3000 ? metadata.clientBalContent.substring(0, 3000) : metadata.clientBalContent}
+
+Generate the keywords JSON array now.
+`;
+}

@@ -16,6 +16,8 @@
 import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
+import ballerina/lang.'string as strings;
+import ballerina/lang.value;
 
 import wso2/connector_automator.utils;
 
@@ -29,6 +31,7 @@ public function generateAllDocumentation(string connectorPath) returns error? {
     check generateExamplesReadme(connectorPath);
     check generateIndividualExampleReadmes(connectorPath);
     check generateMainReadme(connectorPath);
+    check generateKeywords(connectorPath);
 }
 
 public function generateBallerinaReadme(string connectorPath) returns error? {
@@ -407,6 +410,72 @@ function createTemplateData(ConnectorMetadata metadata) returns TemplateData {
         CONNECTOR_NAME: metadata.connectorName,
         VERSION: metadata.version
     };
+}
+
+public function generateKeywords(string connectorPath) returns error? {
+    ConnectorMetadata metadata = check analyzeConnector(connectorPath);
+    string prompt = createKeywordGenerationPrompt(metadata);
+    string aiResponse = check callAI(prompt);
+
+    string extracted = check utils:extractJsonFromLLMResponse(aiResponse.trim());
+    json|error parsed = value:fromJsonString(extracted);
+    if parsed is error {
+        utils:logWarn(string `keyword generation: failed to parse AI response as JSON — skipping write`);
+        return;
+    }
+    json[] arr = check parsed.ensureType();
+    string[] keywords = [];
+    foreach json item in arr {
+        string kw = check item.ensureType();
+        keywords.push(kw);
+    }
+    check writeKeywordsToToml(connectorPath, keywords);
+    utils:logInfo(string `✓ keywords written: ${keywords.toString()}`);
+}
+
+function writeKeywordsToToml(string connectorPath, string[] keywords) returns error? {
+    string tomlPath = connectorPath + "/Ballerina.toml";
+    if !check file:test(tomlPath, file:EXISTS) {
+        tomlPath = connectorPath + "/ballerina/Ballerina.toml";
+    }
+    if !check file:test(tomlPath, file:EXISTS) {
+        utils:logWarn("writeKeywordsToToml: Ballerina.toml not found — skipping");
+        return;
+    }
+
+    string content = check io:fileReadString(tomlPath);
+
+    // Serialise the keywords array to TOML format
+    string[] quoted = from string kw in keywords select string `"${kw}"`;
+    string keywordsLine = string `keywords = [${strings:'join(", ", ...quoted)}]`;
+
+    string updated;
+    if content.includes("keywords") {
+        // Replace the existing keywords line
+        string[] lines = regexp:split(re `\n`, content);
+        string[] newLines = [];
+        foreach string line in lines {
+            if strings:trim(line).startsWith("keywords") {
+                newLines.push(keywordsLine);
+            } else {
+                newLines.push(line);
+            }
+        }
+        updated = strings:'join("\n", ...newLines);
+    } else {
+        // Insert after the version line
+        string[] lines = regexp:split(re `\n`, content);
+        string[] newLines = [];
+        foreach string line in lines {
+            newLines.push(line);
+            if strings:trim(line).startsWith("version") {
+                newLines.push(keywordsLine);
+            }
+        }
+        updated = strings:'join("\n", ...newLines);
+    }
+
+    check io:fileWriteString(tomlPath, updated);
 }
 
 function mergeAIContent(TemplateData baseData, map<string> aiContent) returns TemplateData {

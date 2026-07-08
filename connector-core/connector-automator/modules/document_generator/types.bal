@@ -19,7 +19,9 @@ public type ConnectorMetadata record {
     string[] examples;
     string clientBalContent;
     string typesBalContent;
-
+    string[] existingKeywords;
+    string? description;
+    string? icon;
 };
 
 public type ExampleData record {|

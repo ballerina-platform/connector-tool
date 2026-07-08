@@ -33,7 +33,10 @@ public function analyzeConnector(string connectorPath) returns ConnectorMetadata
         version: "1.0.0",
         examples: [],
         clientBalContent: "",
-        typesBalContent: ""
+        typesBalContent: "",
+        existingKeywords: [],
+        description: (),
+        icon: ()
     };
 
     // Analyze Ballerina.toml
@@ -99,6 +102,34 @@ function analyzeBallerinaToml(string connectorPath, ConnectorMetadata metadata) 
                 string[] parts = regexp:split(re `=`, trimmedLine);
                 if parts.length() > 1 {
                     metadata.version = strings:trim(regexp:replaceAll(re `"`, parts[1], ""));
+                }
+            }
+            if strings:startsWith(trimmedLine, "description") {
+                string[] parts = regexp:split(re `=`, trimmedLine);
+                if parts.length() > 1 {
+                    metadata.description = strings:trim(regexp:replaceAll(re `"`, parts[1], ""));
+                }
+            }
+            if strings:startsWith(trimmedLine, "icon") {
+                string[] parts = regexp:split(re `=`, trimmedLine);
+                if parts.length() > 1 {
+                    metadata.icon = strings:trim(regexp:replaceAll(re `"`, parts[1], ""));
+                }
+            }
+            if strings:startsWith(trimmedLine, "keywords") {
+                int? bracketOpen = trimmedLine.indexOf("[");
+                int? bracketClose = trimmedLine.lastIndexOf("]");
+                if bracketOpen is int && bracketClose is int && bracketClose > bracketOpen {
+                    string arrayContent = trimmedLine.substring(bracketOpen + 1, bracketClose);
+                    string[] tokens = regexp:split(re `,`, arrayContent);
+                    string[] keywords = [];
+                    foreach string token in tokens {
+                        string kw = strings:trim(regexp:replaceAll(re `"`, token, ""));
+                        if kw.length() > 0 {
+                            keywords.push(kw);
+                        }
+                    }
+                    metadata.existingKeywords = keywords;
                 }
             }
 
