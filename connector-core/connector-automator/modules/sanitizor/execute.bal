@@ -97,25 +97,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     string alignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";
 
-    // Conditional step: improve operationIds
-    utils:logVerbose("improving operationIds");
-    int|error operationIdResult = improveOperationIds(alignedSpec, priorIds);
-    if operationIdResult is error {
-        utils:logWarn(string `operationId improvement failed: ${operationIdResult.message()}`);
-    } else {
-        utils:logInfo(string `  improved ${operationIdResult} operationId${operationIdResult == 1 ? "" : "s"}`);
-    }
-
-    // Step 3: Schema renaming
-    utils:logVerbose("renaming InlineResponse schemas");
-    int|error schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec);
-    if schemaRenameResult is error {
-        utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`);
-    } else {
-        utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`);
-    }
-
-    // Step 4: Adding missing descriptions
+    // Step 3: Add missing descriptions
     utils:logVerbose("enhancing field descriptions");
     DescriptionEnhancementResult|error descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec);
     if descriptionsResult is error {
@@ -124,12 +106,30 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
         utils:logInfo(string `  added ${descriptionsResult.descriptionsAdded} missing description${descriptionsResult.descriptionsAdded == 1 ? "" : "s"}`);
     }
 
-    // Step 5: Operation summary improvement
+    // Step 4: Improve operation summaries (uses descriptions added in Step 3 as context)
     utils:logVerbose("improving operation summaries");
     int|error summariesResult = improveOperationSummariesBatchWithRetry(alignedSpec);
     if summariesResult is error {
         utils:logWarn(string `summary improvement failed: ${summariesResult.message()}`);
     } else {
         utils:logInfo(string `  updated ${summariesResult} operation summar${summariesResult == 1 ? "y" : "ies"}`);
+    }
+
+    // Step 5: Improve operationIds (uses descriptions and summaries from Steps 3-4 as context)
+    utils:logVerbose("improving operationIds");
+    int|error operationIdResult = improveOperationIds(alignedSpec, priorIds);
+    if operationIdResult is error {
+        utils:logWarn(string `operationId improvement failed: ${operationIdResult.message()}`);
+    } else {
+        utils:logInfo(string `  improved ${operationIdResult} operationId${operationIdResult == 1 ? "" : "s"}`);
+    }
+
+    // Step 6: Schema renaming
+    utils:logVerbose("renaming InlineResponse schemas");
+    int|error schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec);
+    if schemaRenameResult is error {
+        utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`);
+    } else {
+        utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`);
     }
 }
