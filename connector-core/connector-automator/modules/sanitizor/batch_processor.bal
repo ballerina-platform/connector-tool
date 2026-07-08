@@ -21,8 +21,6 @@ import ballerina/lang.runtime;
 
 configurable RetryConfig retryConfig = {};
 
-const int OPERATION_ID_BATCH_SIZE = 15;
-
 public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests, string apiContext, RetryConfig? config = ()) returns BatchDescriptionResponse[]|error {
     RetryConfig retryConf = config ?: retryConfig;
 
@@ -122,8 +120,8 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
     return error("Unexpected error in retry logic");
 }
 
-public function addMissingDescriptionsBatchWithRetry(string specFilePath, int OPERATION_ID_BATCH_SIZE = 20, RetryConfig? config = ()) returns DescriptionEnhancementResult|error {
-    utils:logVerbose(string `processing spec for missing descriptions: ${specFilePath} (batch size ${OPERATION_ID_BATCH_SIZE})`);
+public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns DescriptionEnhancementResult|error {
+    utils:logVerbose(string `processing spec for missing descriptions: ${specFilePath} (batch size ${BATCH_SIZE})`);
 
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
@@ -164,13 +162,13 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int OP
 
         int startIdx = 0;
         while startIdx < totalRequests {
-            int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
+            int endIdx = startIdx + BATCH_SIZE;
             if endIdx > totalRequests {
                 endIdx = totalRequests;
             }
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
-            int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
+            int batchNum = (startIdx / BATCH_SIZE) + 1;
             utils:logVerbose(string `processing descriptions batch ${batchNum} (${batch.length()} items)`);
 
             BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
@@ -217,7 +215,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int OP
             } else {
                 utils:logError(string `descriptions batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
-            startIdx += OPERATION_ID_BATCH_SIZE;
+            startIdx += BATCH_SIZE;
         }
     }
 
@@ -234,8 +232,8 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int OP
     return {descriptionsAdded: descriptionsAdded, summariesAdded: 0};
 }
 
-public function improveOperationSummariesBatchWithRetry(string specFilePath, int OPERATION_ID_BATCH_SIZE = 20, RetryConfig? config = ()) returns int|error {
-    utils:logVerbose(string `processing spec for operation summaries: ${specFilePath} (batch size ${OPERATION_ID_BATCH_SIZE})`);
+public function improveOperationSummariesBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns int|error {
+    utils:logVerbose(string `processing spec for operation summaries: ${specFilePath} (batch size ${BATCH_SIZE})`);
 
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
@@ -259,13 +257,13 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, int
 
         int startIdx = 0;
         while startIdx < totalRequests {
-            int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
+            int endIdx = startIdx + BATCH_SIZE;
             if endIdx > totalRequests {
                 endIdx = totalRequests;
             }
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
-            int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
+            int batchNum = (startIdx / BATCH_SIZE) + 1;
             utils:logVerbose(string `processing summaries batch ${batchNum} (${batch.length()} items)`);
 
             BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
@@ -289,7 +287,7 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, int
             } else {
                 utils:logError(string `summaries batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
-            startIdx += OPERATION_ID_BATCH_SIZE;
+            startIdx += BATCH_SIZE;
         }
     }
 
@@ -306,7 +304,7 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, int
     return summariesImproved;
 }
 
-public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, int OPERATION_ID_BATCH_SIZE = 10, RetryConfig? config = ()) returns int|error {
+public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns int|error {
     utils:logVerbose(string `processing spec to rename InlineResponse schemas: ${specFilePath}`);
 
     json|error specResult = io:fileReadJson(specFilePath);
@@ -327,16 +325,16 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
         return error("No components section found in OpenAPI spec");
     }
 
-    map<json> components = <map<json>>componentsResult;
-    json|error schemasResult = components.get("schemas");
+    map<json> componentsMap = <map<json>>componentsResult;
+    json|error schemasResult = componentsMap.get("schemas");
     if !(schemasResult is map<json>) {
         return error("No schemas section found in components");
     }
 
-    map<json> schemas = <map<json>>schemasResult;
+    map<json> schemasMap = <map<json>>schemasResult;
 
     string[] allExistingNames = [];
-    foreach string schemaName in schemas.keys() {
+    foreach string schemaName in schemasMap.keys() {
         if (!schemaName.startsWith("InlineResponse")) {
             allExistingNames.push(schemaName);
         }
@@ -345,9 +343,9 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
     SchemaRenameRequest[] renameRequests = [];
     string apiContext = extractApiContext(specMap);
 
-    foreach string schemaName in schemas.keys() {
+    foreach string schemaName in schemasMap.keys() {
         if (schemaName.startsWith("InlineResponse") || schemaName.endsWith("AllOf2") || schemaName.endsWith("OneOf2")) {
-            json|error schemaResult = schemas.get(schemaName);
+            json|error schemaResult = schemasMap.get(schemaName);
             if (schemaResult is map<json>) {
                 string schemaDefinition = (<map<json>>schemaResult).toJsonString();
                 string usageContext = extractSchemaUsageContext(schemaName, specMap);
@@ -373,13 +371,13 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
 
     int startIdx = 0;
     while startIdx < totalRequests {
-        int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
+        int endIdx = startIdx + BATCH_SIZE;
         if endIdx > totalRequests {
             endIdx = totalRequests;
         }
 
         SchemaRenameRequest[] batch = renameRequests.slice(startIdx, endIdx);
-        int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
+        int batchNum = (startIdx / BATCH_SIZE) + 1;
         utils:logVerbose(string `processing schema rename batch ${batchNum} (${batch.length()} schemas)`);
 
         BatchRenameResponse[]|error batchResult = generateSchemaNamesBatchWithRetry(batch, apiContext, allExistingNames, config);
@@ -428,27 +426,27 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
             utils:logError(string `schema rename batch ${batchNum} failed after all retries: ${batchResult.message()}`);
         }
 
-        startIdx += OPERATION_ID_BATCH_SIZE;
+        startIdx += BATCH_SIZE;
     }
 
     if (nameMapping.length() > 0) {
         map<json> newSchemas = {};
-        foreach string oldName in schemas.keys() {
-            json|error schemaValue = schemas.get(oldName);
-            if (schemaValue is json) {
+        foreach string oldName in schemasMap.keys() {
+            json|error schemaValueResult = schemasMap.get(oldName);
+            if (schemaValueResult is json) {
                 if (nameMapping.hasKey(oldName)) {
                     string? newNameResult = nameMapping[oldName];
                     if (newNameResult is string) {
-                        newSchemas[newNameResult] = schemaValue;
+                        newSchemas[newNameResult] = schemaValueResult;
                     }
                 } else {
-                    newSchemas[oldName] = schemaValue;
+                    newSchemas[oldName] = schemaValueResult;
                 }
             }
         }
 
-        components["schemas"] = newSchemas;
-        specMap["components"] = components;
+        componentsMap["schemas"] = newSchemas;
+        specMap["components"] = componentsMap;
 
         json updatedSpecResult = updateSchemaReferences(specMap, nameMapping);
 
@@ -534,10 +532,10 @@ public function improveOperationIds(string specFilePath, map<map<string>>? prior
 
         int startIdx = 0;
         while startIdx < totalRequests {
-            int endIdx = startIdx + OPERATION_ID_BATCH_SIZE;
+            int endIdx = startIdx + BATCH_SIZE;
             if endIdx > totalRequests { endIdx = totalRequests; }
             OperationIdRequest[] batch = requests.slice(startIdx, endIdx);
-            int batchNum = (startIdx / OPERATION_ID_BATCH_SIZE) + 1;
+            int batchNum = (startIdx / BATCH_SIZE) + 1;
             utils:logVerbose(string `processing operationId batch ${batchNum} (${batch.length()} operations)`);
 
             BatchOperationIdResponse[]|error batchResult = generateOperationIdsBatchWithRetry(batch, apiContext, existingOperationIds);
@@ -558,7 +556,7 @@ public function improveOperationIds(string specFilePath, map<map<string>>? prior
             } else {
                 utils:logError(string `operationId batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
-            startIdx += OPERATION_ID_BATCH_SIZE;
+            startIdx += BATCH_SIZE;
         }
     }
 

@@ -69,3 +69,5 @@ public type RetryConfig record {
     decimal backoffMultiplier = 2.0;
     boolean jitter = true;
 };
+
+const int BATCH_SIZE = 20;

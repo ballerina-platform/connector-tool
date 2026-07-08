@@ -111,7 +111,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     // Step 3: Schema renaming
     utils:logVerbose("renaming InlineResponse schemas");
-    int|error schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec, 8);
+    int|error schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec);
     if schemaRenameResult is error {
         utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`);
     } else {
@@ -120,7 +120,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     // Step 4: Documentation enhancement
     utils:logVerbose("enhancing field descriptions");
-    DescriptionEnhancementResult|error descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20);
+    DescriptionEnhancementResult|error descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec);
     if descriptionsResult is error {
         utils:logWarn(string `description enhancement failed: ${descriptionsResult.message()}`);
     } else {
@@ -129,7 +129,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     // Step 5: Operation summary improvement
     utils:logVerbose("improving operation summaries");
-    int|error summariesResult = improveOperationSummariesBatchWithRetry(alignedSpec, 20);
+    int|error summariesResult = improveOperationSummariesBatchWithRetry(alignedSpec);
     if summariesResult is error {
         utils:logWarn(string `summary improvement failed: ${summariesResult.message()}`);
     } else {
