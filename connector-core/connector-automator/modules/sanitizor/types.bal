@@ -13,7 +13,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-public type LLMServiceError distinct error; // custom error type for LLM related failures
+type OperationLocation record {|
+    string path;
+    string method;
+|};
 
 // Batch processing types
 public type DescriptionRequest record {
@@ -51,6 +54,7 @@ public type OperationIdRequest record {
     string summary?;
     string description?;
     string[] tags?;
+    string currentOperationId?;
 };
 
 public type BatchOperationIdResponse record {

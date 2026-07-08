@@ -24,11 +24,24 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
     utils:logVerbose(string `input: ${inputSpecPath}`);
     utils:logVerbose(string `output: ${specDir}/aligned_ballerina_openapi.json`);
 
-    LLMServiceError? llmInitResult = initLLMService();
-    if llmInitResult is LLMServiceError {
-        utils:logWarn(string `AI service not available — only programmatic fixes will be applied (${llmInitResult.message()})`);
-    } else {
-        utils:logInfo("✓ AI service initialized");
+    // Conditional step:  create path+method:operationId map 
+    map<map<string>>? priorIds = ();
+    string existingAlignedSpec = specDir + "/aligned_ballerina_openapi.json";
+    boolean|file:Error alignedSpecExists = file:test(existingAlignedSpec, file:EXISTS);
+    if alignedSpecExists is file:Error {
+        return error("Failed to check for previous aligned spec: " + alignedSpecExists.message());
+    } else if alignedSpecExists {
+        map<map<string>>|error priorMap = buildOperationIdMap(existingAlignedSpec);
+        if priorMap is map<map<string>> && priorMap.length() > 0 {
+            priorIds = priorMap;
+        } else {
+            utils:logVerbose("previous aligned spec found but contains no operationIds — all IDs will be AI-improved");
+        }
+    }
+
+    error? llmInitResult = utils:initAIService();
+    if llmInitResult is error {
+        return error("AI service initialization failed — cannot run sanitization", llmInitResult);
     }
 
     // Step 1: Flatten
@@ -87,31 +100,40 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     string alignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";
 
-    // Step 3: OperationId generation
-    utils:logVerbose("generating missing operationIds");
-    int|LLMServiceError operationIdResult = addMissingOperationIdsBatchWithRetry(alignedSpec, 15);
-    if operationIdResult is LLMServiceError {
-        utils:logWarn(string `operationId generation failed: ${operationIdResult.message()}`);
+    // Conditional step: improve operationIds
+    utils:logVerbose("improving operationIds");
+    int|error operationIdResult = improveOperationIds(alignedSpec, priorIds);
+    if operationIdResult is error {
+        utils:logWarn(string `operationId improvement failed: ${operationIdResult.message()}`);
     } else {
-        utils:logInfo(string `  added ${operationIdResult} missing operationId${operationIdResult == 1 ? "" : "s"}`);
+        utils:logInfo(string `  improved ${operationIdResult} operationId${operationIdResult == 1 ? "" : "s"}`);
     }
 
-    // Step 4: Schema renaming
+    // Step 3: Schema renaming
     utils:logVerbose("renaming InlineResponse schemas");
-    int|LLMServiceError schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec, 8);
-    if schemaRenameResult is LLMServiceError {
+    int|error schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec, 8);
+    if schemaRenameResult is error {
         utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`);
     } else {
         utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`);
     }
 
-    // Step 5: Documentation enhancement
-    utils:logVerbose("enhancing field descriptions and operation summaries");
-    DescriptionEnhancementResult|LLMServiceError descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20);
-    if descriptionsResult is LLMServiceError {
-        utils:logWarn(string `documentation enhancement failed: ${descriptionsResult.message()}`);
+    // Step 4: Documentation enhancement
+    utils:logVerbose("enhancing field descriptions");
+    DescriptionEnhancementResult|error descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20);
+    if descriptionsResult is error {
+        utils:logWarn(string `description enhancement failed: ${descriptionsResult.message()}`);
     } else {
-        utils:logInfo(string `  added ${descriptionsResult.descriptionsAdded} missing description${descriptionsResult.descriptionsAdded == 1 ? "" : "s"}, updated ${descriptionsResult.summariesAdded} operation summar${descriptionsResult.summariesAdded == 1 ? "y" : "ies"}`);
+        utils:logInfo(string `  added ${descriptionsResult.descriptionsAdded} missing description${descriptionsResult.descriptionsAdded == 1 ? "" : "s"}`);
+    }
+
+    // Step 5: Operation summary improvement
+    utils:logVerbose("improving operation summaries");
+    int|error summariesResult = improveOperationSummariesBatchWithRetry(alignedSpec, 20);
+    if summariesResult is error {
+        utils:logWarn(string `summary improvement failed: ${summariesResult.message()}`);
+    } else {
+        utils:logInfo(string `  updated ${summariesResult} operation summar${summariesResult == 1 ? "y" : "ies"}`);
     }
 }
 

@@ -188,14 +188,9 @@ function updateOperationSummaryInSpec(map<json> paths, string location, string s
                     if operation is map<json> {
                         map<json> operationMap = <map<json>>operation;
 
-                        // Defensive hard cap: 37 characters, regardless of AI prompt compliance.
-                        // Also strip any trailing period before capping.
                         string cappedSummary = summary.trim();
                         if cappedSummary.endsWith(".") {
                             cappedSummary = cappedSummary.substring(0, cappedSummary.length() - 1).trim();
-                        }
-                        if cappedSummary.length() > 37 {
-                            cappedSummary = cappedSummary.substring(0, 37);
                         }
 
                         operationMap["summary"] = cappedSummary;
@@ -245,36 +240,28 @@ function updateNestedDescription(map<json> current, string[] pathParts, int inde
     return ();
 }
 
-// Helper function to update operationId in the spec
-function updateOperationIdInSpec(map<json> paths, string location, string operationId) returns error? {
-    // Expect location like "{path}.{method}" (no leading "paths." here)
-    // To be robust, tolerate both "paths.{path}.{method}" and "{path}.{method}"
-    string loc = location;
-    if loc.startsWith("paths.") {
-        loc = loc.substring(6);
-    }
+# Updates the `operationId` of an operation in an OpenAPI paths map.
+#
+# + paths       - The OpenAPI `paths` object as a mutable JSON map
+# + path        - The path key as it appears in the spec (e.g. `"/pets/{id}"`)
+# + method      - The HTTP method in lowercase (e.g. `"get"`, `"delete"`)
+# + operationId - The new operation ID to assign
+# + return      - An error if the operation could not be found
+function updateOperationIdInSpec(map<json> paths, string path, string method, string operationId) returns error? {
+    json|error pathItem = paths.get(path);
+    if pathItem is map<json> {
+        map<json> pathItemMap = <map<json>>pathItem;
 
-    int? lastDot = loc.lastIndexOf(".");
-    if lastDot is int {
-        string path = loc.substring(0, lastDot);
-        string method = loc.substring(lastDot + 1);
-
-        json|error pathItem = paths.get(path);
-        if pathItem is map<json> {
-            map<json> pathItemMap = <map<json>>pathItem;
-
-            if pathItemMap.hasKey(method) {
-                json|error operation = pathItemMap.get(method);
-                if operation is map<json> {
-                    map<json> operationMap = <map<json>>operation;
-                    operationMap["operationId"] = operationId;
-                    return ();
-                }
+        if pathItemMap.hasKey(method) {
+            json|error operation = pathItemMap.get(method);
+            if operation is map<json> {
+                map<json> operationMap = <map<json>>operation;
+                operationMap["operationId"] = operationId;
+                return ();
             }
         }
     }
-
-    return error("Could not find operation at location: " + location);
+    return error("Could not find operation at: " + method + " " + path);
 }
 
 // Helper function to update schema references throughout the JSON structure
