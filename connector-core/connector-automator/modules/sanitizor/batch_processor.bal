@@ -464,7 +464,7 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, R
     return renamedCount;
 }
 
-public function improveOperationIds(string specFilePath, map<map<string>>? priorOperationIds) returns int|error {
+public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<string>>? priorOperationIds) returns int|error {
     
     utils:logVerbose(string `processing spec for operationId improvement: ${specFilePath}`);
 

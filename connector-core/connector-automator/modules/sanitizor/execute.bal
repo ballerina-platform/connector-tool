@@ -117,7 +117,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     // Step 5: Improve operationIds (uses descriptions and summaries from Steps 3-4 as context)
     utils:logVerbose("improving operationIds");
-    int|error operationIdResult = improveOperationIds(alignedSpec, priorIds);
+    int|error operationIdResult = improveOperationIdsBatchWithRetry(alignedSpec, priorIds);
     if operationIdResult is error {
         utils:logWarn(string `operationId improvement failed: ${operationIdResult.message()}`);
     } else {
