@@ -332,7 +332,7 @@ function createTemplateData(ConnectorMetadata metadata) returns TemplateData {
 }
 
 public function generateKeywords(string connectorPath) returns error? {
-    
+
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
     ai:Prompt prompt = createKeywordGenerationPrompt(metadata);
 
