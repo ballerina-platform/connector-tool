@@ -22,6 +22,9 @@ string cachedApiKey = "";
 ai:ModelProvider? defaultModel = ();
 
 public function initAIService() returns error? {
+    if defaultModel !is () {
+        return;
+    }
     string apiKey = os:getEnv("ANTHROPIC_API_KEY");
     if apiKey.length() == 0 {
         return error("ANTHROPIC_API_KEY environment variable is not set");
@@ -116,6 +119,16 @@ public function validateApiKey() returns error? {
         return error("ANTHROPIC_API_KEY not configured");
     }
 }
+
+public function getAIModel() returns ai:ModelProvider|error {
+    ai:ModelProvider? model = defaultModel;
+    if model is () {
+        return error("AI model not initialized. Please call initAIService() first.");
+    }
+    return model;
+}
+
+
 
 # Extract a JSON object string from an LLM response that may be wrapped in markdown fences.
 #

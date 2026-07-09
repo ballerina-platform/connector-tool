@@ -13,6 +13,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
+
+type ConnectorKeywords record {|
+    string cost;
+    string vendor;
+    string area;
+|};
+
 public type ConnectorMetadata record {
     string connectorName;
     string version;

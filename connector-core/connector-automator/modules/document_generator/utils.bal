@@ -15,16 +15,8 @@
 
 import ballerina/file;
 import ballerina/io;
-import ballerina/os;
 import ballerina/lang.regexp;
 import ballerina/lang.'string as strings;
-
-function validateApiKey() returns error? {
-    string? apiKey = os:getEnv("ANTHROPIC_API_KEY");
-    if apiKey is () || apiKey.trim().length() == 0 {
-        return error("ANTHROPIC_API_KEY not configured");
-    }
-}
 
 function ensureDirectoryExists(string dirPath) returns error? {
     if !check file:test(dirPath, file:EXISTS) {

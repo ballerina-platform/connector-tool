@@ -83,6 +83,8 @@ public function runSdkWorkflow(string[] args) returns error? {
         return error("ANTHROPIC_API_KEY is not set. The SDK workflow requires an Anthropic API key.");
     }
 
+    check oautils:initAIService();
+
     string subCommand = args[0];
     string[] subArgs = args.slice(1);
 

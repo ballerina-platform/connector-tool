@@ -13,17 +13,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/ai;
 import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
 import ballerina/lang.'string as strings;
-import ballerina/lang.value;
-
 import wso2/connector_automator.utils;
-
-public function initDocumentationGenerator() returns error? {
-    return utils:initAIService();
-}
 
 public function generateAllDocumentation(string connectorPath) returns error? {
     check generateBallerinaReadme(connectorPath);
@@ -137,7 +132,7 @@ function generateSingleExampleReadme(string examplePath, string exampleDirName, 
 function generateIndividualExampleContent(ExampleData exampleData, ConnectorMetadata connectorMetadata) returns map<string>|error {
     map<string> content = {};
     string prompt = createIndividualExamplePrompt(exampleData, connectorMetadata);
-    string result = check callAI(prompt);
+    string result = check utils:callAI(prompt);
 
     content["individual_readme"] = result;
     return content;
@@ -185,19 +180,19 @@ function generateBallerinaContent(ConnectorMetadata metadata) returns map<string
     map<string> content = {};
 
     string overviewPrompt = createBallerinaOverviewPrompt(metadata);
-    string overviewResult = check callAI(overviewPrompt);
+    string overviewResult = check utils:callAI(overviewPrompt);
     content["overview"] = overviewResult;
 
     string setupPrompt = createBallerinaSetupPrompt(metadata);
-    string setupResult = check callAI(setupPrompt);
+    string setupResult = check utils:callAI(setupPrompt);
     content["setup"] = setupResult;
 
     string quickstartPrompt = createBallerinaQuickstartPrompt(metadata);
-    string quickstartResult = check callAI(quickstartPrompt);
+    string quickstartResult = check utils:callAI(quickstartPrompt);
     content["quickstart"] = quickstartResult;
 
     string examplesPrompt = createBallerinaExamplesPrompt(metadata);
-    string examplesResult = check callAI(examplesPrompt);
+    string examplesResult = check utils:callAI(examplesPrompt);
     content["examples"] = examplesResult;
 
     return content;
@@ -206,7 +201,7 @@ function generateBallerinaContent(ConnectorMetadata metadata) returns map<string
 function generateTestsContent(ConnectorMetadata metadata) returns map<string>|error {
     map<string> content = {};
     string testsPrompt = createTestReadmePrompt(metadata);
-    string testsResult = check callAI(testsPrompt);
+    string testsResult = check utils:callAI(testsPrompt);
     content["testing_approach"] = testsResult;
 
     return content;
@@ -215,7 +210,7 @@ function generateTestsContent(ConnectorMetadata metadata) returns map<string>|er
 function generateExamplesContent(ConnectorMetadata metadata) returns map<string>|error {
     map<string> content = {};
     string mainExamplesPrompt = createMainExampleReadmePrompt(metadata);
-    string mainExamplesResult = check callAI(mainExamplesPrompt);
+    string mainExamplesResult = check utils:callAI(mainExamplesPrompt);
     content["main_examples_readme"] = mainExamplesResult;
 
     return content;
@@ -228,26 +223,22 @@ function generateMainContent(ConnectorMetadata metadata) returns map<string>|err
     content["useful_links"] = createUsefulLinksSection(metadata);
 
     string overviewPrompt = createBallerinaOverviewPrompt(metadata);
-    string overviewResult = check callAI(overviewPrompt);
+    string overviewResult = check utils:callAI(overviewPrompt);
     content["overview"] = overviewResult;
 
     string setupPrompt = createBallerinaSetupPrompt(metadata);
-    string setupResult = check callAI(setupPrompt);
+    string setupResult = check utils:callAI(setupPrompt);
     content["setup"] = setupResult;
 
     string quickstartPrompt = createBallerinaQuickstartPrompt(metadata);
-    string quickstartResult = check callAI(quickstartPrompt);
+    string quickstartResult = check utils:callAI(quickstartPrompt);
     content["quickstart"] = quickstartResult;
 
     string examplesPrompt = createBallerinaExamplesPrompt(metadata);
-    string examplesResult = check callAI(examplesPrompt);
+    string examplesResult = check utils:callAI(examplesPrompt);
     content["examples"] = examplesResult;
 
     return content;
-}
-
-function callAI(string prompt) returns string|error {
-    return utils:callAI(prompt);
 }
 
 // Template processing functions
@@ -341,23 +332,16 @@ function createTemplateData(ConnectorMetadata metadata) returns TemplateData {
 }
 
 public function generateKeywords(string connectorPath) returns error? {
+    
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
-    string prompt = createKeywordGenerationPrompt(metadata);
-    string aiResponse = check callAI(prompt);
+    ai:Prompt prompt = createKeywordGenerationPrompt(metadata);
 
-    string extracted = check utils:extractJsonFromLLMResponse(aiResponse.trim());
-    json|error parsed = value:fromJsonString(extracted);
-    if parsed is error {
-        utils:logWarn(string `keyword generation: failed to parse AI response as JSON — skipping write`);
-        return;
-    }
-    json[] arr = check parsed.ensureType();
-    string[] keywords = [];
-    foreach json item in arr {
-        string kw = check item.ensureType();
-        keywords.push(kw);
-    }
+    ai:ModelProvider model = check utils:getAIModel();
+    ConnectorKeywords kw = check model->generate(prompt);
+
+    string[] keywords = [kw.cost, kw.vendor, kw.area, "Type/Connector"];
     check writeKeywordsToToml(connectorPath, keywords);
+
     utils:logInfo(string `✓ keywords written: ${keywords.toString()}`);
 }
 

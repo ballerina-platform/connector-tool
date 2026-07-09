@@ -18,9 +18,6 @@ import wso2/connector_automator.utils;
 import ballerina/io;
 
 public function executeDocumentGeneration(string connectorPath, string[] excluded = []) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-    utils:logVerbose("✓ AI generator initialized");
 
     if excluded.indexOf("client") is () {
     check generateMainReadme(connectorPath);
@@ -71,8 +68,6 @@ public function executeDocGen(string command, string connectorPath, string[] exc
 }
 
 function generateAllReadmes(string connectorPath, string[] excluded) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
     utils:logVerbose("✓ AI generator initialized");
 
     utils:logVerbose("generating documentation files");
@@ -96,9 +91,6 @@ function generateAllReadmes(string connectorPath, string[] excluded) returns err
 }
 
 function genBallerinaReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateBallerinaReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -108,9 +100,6 @@ function genBallerinaReadme(string connectorPath) returns error? {
 }
 
 function genTestsReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateTestsReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -120,9 +109,6 @@ function genTestsReadme(string connectorPath) returns error? {
 }
 
 function genExamplesReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateExamplesReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -132,9 +118,6 @@ function genExamplesReadme(string connectorPath) returns error? {
 }
 
 function genIndividualExampleReadmes(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateIndividualExampleReadmes(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -144,9 +127,6 @@ function genIndividualExampleReadmes(string connectorPath) returns error? {
 }
 
 function genMainReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateMainReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -156,9 +136,6 @@ function genMainReadme(string connectorPath) returns error? {
 }
 
 function genKeywords(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateKeywords(connectorPath);
     if result is error {
         utils:logError(string `keyword generation failed: ${result.message()}`);
