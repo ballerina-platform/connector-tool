@@ -16,7 +16,27 @@
 import wso2/connector_automator.utils;
 
 import ballerina/io;
-import ballerina/os;
+
+public function executeDocumentGeneration(string connectorPath, string[] excluded = []) returns error? {
+    check validateApiKey();
+    check initDocumentationGenerator();
+    utils:logVerbose("✓ AI generator initialized");
+
+    if excluded.indexOf("client") is () {
+    check generateMainReadme(connectorPath);
+        check generateBallerinaReadme(connectorPath);
+    }
+    if excluded.indexOf("tests") is () {
+        check generateTestsReadme(connectorPath);
+    }
+    if excluded.indexOf("examples") is () {
+        check generateExamplesReadme(connectorPath);
+        check generateIndividualExampleReadmes(connectorPath);
+    }
+    check generateKeywords(connectorPath);
+
+    utils:logInfo("✓ documentation generated");
+}
 
 public function executeDocGen(string command, string connectorPath, string[] excluded = []) returns error? {
     utils:logVerbose(string `command: ${command}, connector: ${connectorPath}`);
@@ -143,13 +163,6 @@ function genKeywords(string connectorPath) returns error? {
     if result is error {
         utils:logError(string `keyword generation failed: ${result.message()}`);
         return result;
-    }
-}
-
-function validateApiKey() returns error? {
-    string? apiKey = os:getEnv("ANTHROPIC_API_KEY");
-    if apiKey is () || apiKey.trim().length() == 0 {
-        return error("ANTHROPIC_API_KEY not configured");
     }
 }
 

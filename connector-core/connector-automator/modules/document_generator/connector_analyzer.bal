@@ -156,14 +156,6 @@ function analyzeExamples(string connectorPath, ConnectorMetadata metadata) retur
     }
 }
 
-function trimLeadingPathSeparators(string path) returns string {
-    string normalized = path;
-    while normalized.startsWith("/") || normalized.startsWith("\\") {
-        normalized = normalized.substring(1);
-    }
-    return normalized;
-}
-
 public function getConnectorSummary(ConnectorMetadata metadata) returns string {
     string summary = "Connector: " + metadata.connectorName + "\n";
     summary += "Version: " + metadata.version + "\n";
@@ -207,22 +199,3 @@ public function analyzeExampleDirectory(string examplePath, string exampleDirNam
     return exampleData;
 }
 
-public function formatExampleName(string dirName) returns string {
-    string[] parts = regexp:split(re `[-_]`, dirName);
-    string[] capitalizedParts = [];
-
-    foreach int i in 0 ..< parts.length() {
-        string part = parts[i];
-        if part.length() > 0 {
-            if i == 0 {
-                // Capitalize first word completely
-                capitalizedParts.push(part.substring(0, 1).toUpperAscii() + part.substring(1).toLowerAscii());
-            } else {
-                // Keep other words lowercase
-                capitalizedParts.push(part.toLowerAscii());
-            }
-        }
-    }
-
-    return strings:'join(" ", ...capitalizedParts);
-}

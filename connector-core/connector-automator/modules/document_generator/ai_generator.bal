@@ -41,7 +41,7 @@ public function generateBallerinaReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("ballerina_readme_template.md", data);
+    string content = substituteVariables(ballerinaReadmeTemplate(), data);
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string outputPath = ballerinaDir + "/README.md";
@@ -61,7 +61,7 @@ public function generateTestsReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("tests_readme_template.md", data);
+    string content = substituteVariables(testsReadmeTemplate(), data);
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string outputPath = ballerinaDir + "/tests/README.md";
@@ -112,15 +112,6 @@ public function generateIndividualExampleReadmes(string connectorPath) returns e
     }
 }
 
-function extractDirectoryName(string fullPath) returns string {
-    // Get the last segment of the path
-    string[] pathParts = regexp:split(re `/`, fullPath);
-    if pathParts.length() > 0 {
-        return pathParts[pathParts.length() - 1];
-    }
-    return fullPath;
-}
-
 function generateSingleExampleReadme(string examplePath, string exampleDirName, ConnectorMetadata metadata) returns error? {
     // Read all .bal files in the example directory
     ExampleData exampleData = check analyzeExampleDirectory(examplePath, exampleDirName);
@@ -135,7 +126,7 @@ function generateSingleExampleReadme(string examplePath, string exampleDirName, 
     // Add example-specific data
     data.CONNECTOR_NAME = metadata.connectorName;
 
-    string content = check processTemplate("example_specific_template.md", data);
+    string content = substituteVariables(exampleSpecificTemplate(), data);
 
     string readmeFileName = "README.md";
     string outputPath = examplePath + "/" + readmeFileName;
@@ -159,7 +150,7 @@ public function generateExamplesReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("examples_readme_template.md", data);
+    string content = substituteVariables(examplesReadmeTemplate(), data);
 
     string outputPath = connectorPath + "/examples/README.md";
 
@@ -178,7 +169,7 @@ public function generateMainReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("main_readme_template.md", data);
+    string content = substituteVariables(mainReadmeTemplate(), data);
 
     string outputPath = connectorPath + "/README.md";
 
@@ -259,21 +250,7 @@ function callAI(string prompt) returns string|error {
     return utils:callAI(prompt);
 }
 
-function ensureDirectoryExists(string dirPath) returns error? {
-    if !check file:test(dirPath, file:EXISTS) {
-        check file:createDir(dirPath, file:RECURSIVE);
-    }
-}
-
 // Template processing functions
-function processTemplate(string templateName, TemplateData data) returns string|error {
-    string? template = DOCUMENT_TEMPLATES[templateName];
-    if template is () {
-        return error("Template not found: " + templateName);
-    }
-    return substituteVariables(template, data);
-}
-
 function substituteVariables(string template, TemplateData data) returns string {
     string result = template;
 
@@ -354,55 +331,6 @@ function substituteVariables(string template, TemplateData data) returns string 
     }
 
     return result;
-}
-
-function simpleReplace(string text, string searchFor, string replaceWith) returns string {
-    string result = text;
-    int? index = result.indexOf(searchFor);
-    while index is int {
-        string before = result.substring(0, index);
-        string after = result.substring(index + searchFor.length());
-        result = before + replaceWith + after;
-        index = result.indexOf(searchFor);
-    }
-    return result;
-}
-
-function writeOutput(string content, string outputPath) returns error? {
-    string normalized = normalizeGeneratedMarkdown(content);
-    check io:fileWriteString(outputPath, normalized);
-}
-
-function normalizeGeneratedMarkdown(string content) returns string {
-    string[] lines = regexp:split(re `\n`, content);
-    string[] cleaned = [];
-    string previousHeading = "";
-
-    foreach string line in lines {
-        string trimmed = line.trim();
-        boolean isHeading = trimmed.startsWith("#");
-
-        if isHeading {
-            if previousHeading == trimmed {
-                continue;
-            }
-            previousHeading = trimmed;
-        } else if trimmed.length() > 0 {
-            previousHeading = "";
-        }
-
-        cleaned.push(line);
-    }
-
-    string output = string:'join("\n", ...cleaned);
-
-    string previous = "";
-    while previous != output {
-        previous = output;
-        output = simpleReplace(output, "\n\n\n", "\n\n");
-    }
-
-    return output.trim() + "\n";
 }
 
 function createTemplateData(ConnectorMetadata metadata) returns TemplateData {
