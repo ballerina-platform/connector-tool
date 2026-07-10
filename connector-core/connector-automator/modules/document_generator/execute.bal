@@ -20,7 +20,7 @@ import ballerina/io;
 public function executeDocumentGeneration(string connectorPath, string[] excluded = []) returns error? {
 
     if excluded.indexOf("client") is () {
-    check generateMainReadme(connectorPath);
+        check generateMainReadme(connectorPath);
         check generateBallerinaReadme(connectorPath);
     }
     if excluded.indexOf("tests") is () {
@@ -30,7 +30,9 @@ public function executeDocumentGeneration(string connectorPath, string[] exclude
         check generateExamplesReadme(connectorPath);
         check generateIndividualExampleReadmes(connectorPath);
     }
-    check generateKeywords(connectorPath);
+    if excluded.indexOf("metadata") is () {
+        check generateKeywords(connectorPath);
+    }
 
     utils:logInfo("✓ documentation generated");
 }
@@ -68,8 +70,6 @@ public function executeDocGen(string command, string connectorPath, string[] exc
 }
 
 function generateAllReadmes(string connectorPath, string[] excluded) returns error? {
-    utils:logVerbose("✓ AI generator initialized");
-
     utils:logVerbose("generating documentation files");
 
     if excluded.indexOf("client") is () {

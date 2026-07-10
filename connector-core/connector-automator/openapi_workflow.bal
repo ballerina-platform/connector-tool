@@ -30,6 +30,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
 
     utils:LogLevel level = logLevel == "quiet" ? "quiet" : logLevel == "verbose" ? "verbose" : "normal";
     utils:initLogLevel(level);
+    check utils:initAIService();
     boolean interactive = interactiveArg == "interactive";
     string[] excluded = excludedStages.length() == 0 ? [] : re`,`.split(excludedStages);
 
