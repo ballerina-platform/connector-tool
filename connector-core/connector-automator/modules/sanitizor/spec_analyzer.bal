@@ -97,19 +97,25 @@ function isInvalidDescription(map<json> fieldMap) returns boolean {
 }
 
 // Helper function to collect description requests from schema
-function collectDescriptionRequests(map<json> schemaMap, string schemaName, string pathPrefix,
-        DescriptionRequest[] requests, map<string> locationMap, json fullSpec) {
+// Locations for schema/property descriptions are carried as segment arrays
+// (e.g. ["User", "properties", "user.name"]) rather than dot-joined strings, so
+// that property names legally containing dots do not corrupt navigation.
+function collectDescriptionRequests(map<json> schemaMap, string schemaName, string[] pathSegments,
+        DescriptionRequest[] requests, map<string|string[]> locationMap, json fullSpec) {
+    string[] effectiveSegments = pathSegments.length() > 0 ? pathSegments : [schemaName];
+    string displayPath = string:'join(".", ...effectiveSegments);
+
     // Check if schema itself needs description
     if isInvalidDescription(schemaMap) {
-        string requestId = generateRequestId(schemaName, pathPrefix, "schema");
+        string requestId = generateRequestId(schemaName, displayPath, "schema");
         string context = string `Schema '${schemaName}' definition: ${schemaMap.toString()}`;
         requests.push({
             id: requestId,
             name: schemaName,
             context: context,
-            schemaPath: pathPrefix.length() > 0 ? pathPrefix : schemaName
+            schemaPath: displayPath
         });
-        locationMap[requestId] = pathPrefix.length() > 0 ? pathPrefix : schemaName;
+        locationMap[requestId] = effectiveSegments;
     }
 
     // Process properties
@@ -117,7 +123,7 @@ function collectDescriptionRequests(map<json> schemaMap, string schemaName, stri
         json|error propertiesResult = schemaMap.get("properties");
         if propertiesResult is map<json> {
             map<json> properties = <map<json>>propertiesResult;
-            collectPropertyDescriptionRequests(properties, schemaName, pathPrefix, requests, locationMap, fullSpec);
+            collectPropertyDescriptionRequests(properties, schemaName, effectiveSegments, requests, locationMap, fullSpec);
         }
     }
 
@@ -132,10 +138,8 @@ function collectDescriptionRequests(map<json> schemaMap, string schemaName, stri
                     json nestedItem = nestedArray[i];
                     if nestedItem is map<json> {
                         map<json> nestedItemMap = <map<json>>nestedItem;
-                        string nestedPath = pathPrefix.length() > 0 ?
-                            pathPrefix + "." + nestedType + "[" + i.toString() + "]" :
-                            schemaName + "." + nestedType + "[" + i.toString() + "]";
-                        collectDescriptionRequests(nestedItemMap, schemaName, nestedPath, requests, locationMap, fullSpec);
+                        string[] nestedSegments = [...effectiveSegments, nestedType + "[" + i.toString() + "]"];
+                        collectDescriptionRequests(nestedItemMap, schemaName, nestedSegments, requests, locationMap, fullSpec);
                     }
                 }
             }
@@ -144,15 +148,14 @@ function collectDescriptionRequests(map<json> schemaMap, string schemaName, stri
 }
 
 // Helper function to collect property description requests
-function collectPropertyDescriptionRequests(map<json> properties, string parentSchemaName, string pathPrefix,
-        DescriptionRequest[] requests, map<string> locationMap, json fullSpec) {
+function collectPropertyDescriptionRequests(map<json> properties, string parentSchemaName, string[] pathSegments,
+        DescriptionRequest[] requests, map<string|string[]> locationMap, json fullSpec) {
     foreach string propertyName in properties.keys() {
         json|error propertyResult = properties.get(propertyName);
         if propertyResult is map<json> {
             map<json> propertyMap = <map<json>>propertyResult;
-            string propertyPath = pathPrefix.length() > 0 ?
-                pathPrefix + ".properties." + propertyName :
-                parentSchemaName + ".properties." + propertyName;
+            string[] propertySegments = [...pathSegments, "properties", propertyName];
+            string propertyPath = string:'join(".", ...propertySegments);
 
             // Check if property needs description
             if isInvalidDescription(propertyMap) {
@@ -178,7 +181,7 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                     context: context,
                     schemaPath: propertyPath
                 });
-                locationMap[requestId] = propertyPath;
+                locationMap[requestId] = propertySegments;
             }
 
             // Recursively process nested properties
@@ -186,7 +189,7 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                 json|error nestedPropertiesResult = propertyMap.get("properties");
                 if nestedPropertiesResult is map<json> {
                     map<json> nestedProperties = <map<json>>nestedPropertiesResult;
-                    collectPropertyDescriptionRequests(nestedProperties, parentSchemaName, propertyPath, requests, locationMap, fullSpec);
+                    collectPropertyDescriptionRequests(nestedProperties, parentSchemaName, propertySegments, requests, locationMap, fullSpec);
                 }
             }
 
@@ -199,8 +202,8 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                         json|error itemPropertiesResult = items.get("properties");
                         if itemPropertiesResult is map<json> {
                             map<json> itemProperties = <map<json>>itemPropertiesResult;
-                            string itemPath = propertyPath + ".items";
-                            collectPropertyDescriptionRequests(itemProperties, parentSchemaName, itemPath, requests, locationMap, fullSpec);
+                            string[] itemSegments = [...propertySegments, "items"];
+                            collectPropertyDescriptionRequests(itemProperties, parentSchemaName, itemSegments, requests, locationMap, fullSpec);
                         }
                     }
                 }
@@ -483,7 +486,7 @@ function containsSchemaReference(json data, string refPattern) returns boolean {
 }
 
 // Helper function to collect parameter description requests
-function collectParameterDescriptionRequests(json spec, DescriptionRequest[] requests, map<string> locationMap) {
+function collectParameterDescriptionRequests(json spec, DescriptionRequest[] requests, map<string|string[]> locationMap) {
     json|error pathsResult = spec.paths;
     if pathsResult is map<json> {
         foreach string path in pathsResult.keys() {
@@ -572,7 +575,7 @@ function collectParameterDescriptionRequests(json spec, DescriptionRequest[] req
 }
 
 // Helper function to collect operation description requests (for client return parameters)
-function collectOperationDescriptionRequests(json spec, DescriptionRequest[] requests, map<string> locationMap) {
+function collectOperationDescriptionRequests(json spec, DescriptionRequest[] requests, map<string|string[]> locationMap) {
     json|error pathsResult = spec.paths;
     if pathsResult is map<json> {
         foreach string path in pathsResult.keys() {

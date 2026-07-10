@@ -51,6 +51,20 @@ public function calculateBackoffDelay(int attempt, RetryConfig config) returns d
 public function isRetryableError(error err) returns boolean {
     string message = err.message().toLowerAscii();
 
+    // Fast-fail on permanent errors — retrying these only wastes backoff cycles.
+    boolean isPermanentError = message.includes("401") ||
+                            message.includes("403") ||
+                            message.includes("400") ||
+                            message.includes("unauthorized") ||
+                            message.includes("forbidden") ||
+                            message.includes("invalid api key") ||
+                            message.includes("authentication") ||
+                            message.includes("invalid_request") ||
+                            message.includes("bad request");
+    if isPermanentError {
+        return false;
+    }
+
     // Retry on these types of errors
     boolean isNetworkError = message.includes("network") ||
                             message.includes("connection") ||
@@ -71,10 +85,8 @@ public function isRetryableError(error err) returns boolean {
                             message.includes("unavailable") ||
                             message.includes("overloaded");
 
-    boolean isLLMResponseError = message.includes("unrecognized token") ||
-                            message.includes("model") ||
-                            message.includes("service") ||
-                            message.includes("api");
+    // Malformed LLM JSON output is worth one more attempt.
+    boolean isLLMResponseError = message.includes("unrecognized token");
 
     return isNetworkError || isRateLimitError || isServerError || isTemporaryError || isLLMResponseError;
 }

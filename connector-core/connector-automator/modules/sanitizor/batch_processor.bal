@@ -136,7 +136,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
         string apiContext = extractApiContext(specJson);
 
         DescriptionRequest[] allRequests = [];
-        map<string> requestToLocationMap = {};
+        map<string|string[]> requestToLocationMap = {};
 
         json|error componentsResult = specMap.get("components");
         if componentsResult is map<json> {
@@ -148,7 +148,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
                     json|error schemaResult = schemas.get(schemaName);
                     if schemaResult is map<json> {
                         map<json> schemaMap = <map<json>>schemaResult;
-                        collectDescriptionRequests(schemaMap, schemaName, "", allRequests, requestToLocationMap, specJson);
+                        collectDescriptionRequests(schemaMap, schemaName, [], allRequests, requestToLocationMap, specJson);
                     }
                 }
             }
@@ -160,6 +160,8 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
         int totalRequests = allRequests.length();
         utils:logVerbose(string `collected ${totalRequests} description requests`);
 
+        int totalBatches = 0;
+        int failedBatches = 0;
         int startIdx = 0;
         while startIdx < totalRequests {
             int endIdx = startIdx + BATCH_SIZE;
@@ -169,6 +171,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
             int batchNum = (startIdx / BATCH_SIZE) + 1;
+            totalBatches += 1;
             utils:logVerbose(string `processing descriptions batch ${batchNum} (${batch.length()} items)`);
 
             BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
@@ -176,10 +179,22 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
                 utils:logVerbose(string `batch ${batchNum} complete (${batchResult.length()} descriptions)`);
 
                 foreach BatchDescriptionResponse response in batchResult {
-                    string? location = requestToLocationMap[response.id];
-                    if location is string {
-                        error? updateResult = ();
+                    string|string[]? location = requestToLocationMap[response.id];
+                    error? updateResult = ();
+                    boolean dispatched = false;
 
+                    if location is string[] {
+                        // Schema/property description — segment-array location
+                        dispatched = true;
+                        json|error componentsResult2 = specMap.get("components");
+                        if componentsResult2 is map<json> {
+                            json|error schemasResult2 = componentsResult2.get("schemas");
+                            if schemasResult2 is map<json> {
+                                updateResult = updateDescriptionInSpec(<map<json>>schemasResult2, location, response.description);
+                            }
+                        }
+                    } else if location is string {
+                        dispatched = true;
                         if location.startsWith("paths.") && location.includes("parameters[name=") {
                             json|error pathsResult = specMap.get("paths");
                             if pathsResult is map<json> {
@@ -195,16 +210,10 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
                             if pathsResult is map<json> {
                                 updateResult = updateOperationDescriptionInSpec(<map<json>>pathsResult, location, response.description);
                             }
-                        } else {
-                            json|error componentsResult2 = specMap.get("components");
-                            if componentsResult2 is map<json> {
-                                json|error schemasResult2 = componentsResult2.get("schemas");
-                                if schemasResult2 is map<json> {
-                                    updateResult = updateDescriptionInSpec(<map<json>>schemasResult2, location, response.description);
-                                }
-                            }
                         }
+                    }
 
+                    if dispatched {
                         if updateResult is () {
                             descriptionsAdded += 1;
                         } else {
@@ -213,9 +222,17 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
                     }
                 }
             } else {
+                failedBatches += 1;
                 utils:logError(string `descriptions batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
             startIdx += BATCH_SIZE;
+        }
+
+        if totalBatches > 0 && failedBatches == totalBatches {
+            return error(string `all ${totalBatches} description batches failed — spec not updated`);
+        }
+        if failedBatches > 0 {
+            utils:logWarn(string `${failedBatches}/${totalBatches} description batches failed — results are partial`);
         }
     }
 
@@ -255,6 +272,8 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
         int totalRequests = allRequests.length();
         utils:logVerbose(string `collected ${totalRequests} summary requests`);
 
+        int totalBatches = 0;
+        int failedBatches = 0;
         int startIdx = 0;
         while startIdx < totalRequests {
             int endIdx = startIdx + BATCH_SIZE;
@@ -264,6 +283,7 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
             int batchNum = (startIdx / BATCH_SIZE) + 1;
+            totalBatches += 1;
             utils:logVerbose(string `processing summaries batch ${batchNum} (${batch.length()} items)`);
 
             BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
@@ -285,9 +305,17 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
                     }
                 }
             } else {
+                failedBatches += 1;
                 utils:logError(string `summaries batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
             startIdx += BATCH_SIZE;
+        }
+
+        if totalBatches > 0 && failedBatches == totalBatches {
+            return error(string `all ${totalBatches} summary batches failed — spec not updated`);
+        }
+        if failedBatches > 0 {
+            utils:logWarn(string `${failedBatches}/${totalBatches} summary batches failed — results are partial`);
         }
     }
 
@@ -530,12 +558,15 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<s
     } else {
         utils:logVerbose(string `collected ${totalRequests} operationId improvement request${totalRequests == 1 ? "" : "s"}`);
 
+        int totalBatches = 0;
+        int failedBatches = 0;
         int startIdx = 0;
         while startIdx < totalRequests {
             int endIdx = startIdx + BATCH_SIZE;
             if endIdx > totalRequests { endIdx = totalRequests; }
             OperationIdRequest[] batch = requests.slice(startIdx, endIdx);
             int batchNum = (startIdx / BATCH_SIZE) + 1;
+            totalBatches += 1;
             utils:logVerbose(string `processing operationId batch ${batchNum} (${batch.length()} operations)`);
 
             BatchOperationIdResponse[]|error batchResult = generateOperationIdsBatchWithRetry(batch, apiContext, existingOperationIds);
@@ -544,9 +575,17 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<s
                 foreach BatchOperationIdResponse response in batchResult {
                     OperationLocation? loc = requestToLocationMap[response.id];
                     if loc is OperationLocation {
-                        error? updateResult = updateOperationIdInSpec(paths, loc.path, loc.method, response.operationId);
+                        // De-duplicate: two responses in the same batch can collide, and the
+                        // AI may re-propose a name already reserved. Suffix until unique.
+                        string opId = response.operationId;
+                        int counter = 1;
+                        while existingOperationIds.indexOf(opId) is int {
+                            opId = response.operationId + counter.toString();
+                            counter += 1;
+                        }
+                        error? updateResult = updateOperationIdInSpec(paths, loc.path, loc.method, opId);
                         if updateResult is () {
-                            existingOperationIds.push(response.operationId);
+                            existingOperationIds.push(opId);
                             aiImproved += 1;
                         } else {
                             utils:logError(string `failed to apply operationId for ${response.id}: ${updateResult.message()}`);
@@ -554,9 +593,17 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<s
                     }
                 }
             } else {
+                failedBatches += 1;
                 utils:logError(string `operationId batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
             startIdx += BATCH_SIZE;
+        }
+
+        if totalBatches > 0 && failedBatches == totalBatches {
+            return error(string `all ${totalBatches} operationId batches failed — spec not updated`);
+        }
+        if failedBatches > 0 {
+            utils:logWarn(string `${failedBatches}/${totalBatches} operationId batches failed — results are partial`);
         }
     }
 

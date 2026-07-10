@@ -17,32 +17,28 @@ import wso2/connector_automator.utils;
 
 import ballerina/regex;
 
-// Helper function to update description in spec using location path
-function updateDescriptionInSpec(map<json> schemas, string location, string description) returns error? {
-    string[] pathParts = regex:split(location, "\\.");
-
-    if pathParts.length() == 1 {
-        // Schema-level description
-        string schemaName = pathParts[0];
-        json|error schemaResult = schemas.get(schemaName);
-        if schemaResult is map<json> {
-            map<json> schemaMap = <map<json>>schemaResult;
-            schemaMap["description"] = description;
-            // No need to reassign since we're modifying the original reference
-        }
-    } else {
-        // Property-level description - navigate to the correct location
-        string schemaName = pathParts[0];
-        json|error schemaResult = schemas.get(schemaName);
-        if schemaResult is map<json> {
-            error? result = updateNestedDescription(<map<json>>schemaResult, pathParts, 1, description);
-            if result is error {
-                return result;
-            }
-        }
+// Helper function to update description in spec using a segment-array location.
+// Segments (e.g. ["User", "properties", "user.name"]) are pre-split so property
+// names containing dots navigate correctly.
+function updateDescriptionInSpec(map<json> schemas, string[] pathParts, string description) returns error? {
+    if pathParts.length() == 0 {
+        return error("Empty description location");
     }
 
-    return ();
+    string schemaName = pathParts[0];
+    json|error schemaResult = schemas.get(schemaName);
+    if !(schemaResult is map<json>) {
+        return error("Could not find schema at location: " + schemaName);
+    }
+
+    map<json> schemaMap = <map<json>>schemaResult;
+    if pathParts.length() == 1 {
+        // Schema-level description — modifying the map reference in place
+        schemaMap["description"] = description;
+        return ();
+    }
+
+    return updateNestedDescription(schemaMap, pathParts, 1, description);
 }
 
 // Searches a parameter array for a matching entry and updates its description.
