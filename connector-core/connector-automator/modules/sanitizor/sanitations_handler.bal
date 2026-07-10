@@ -113,10 +113,10 @@ public function generateSanitationsDoc(
     if existsAlready {
         utils:logVerbose("updating existing sanitations.md");
         string existing = check io:fileReadString(sanitationsPath);
-        content = check mergeWithExistingSanitations(existing, originalSpec, alignedSpec);
+        content = check mergeWithExistingSanitations(existing, originalSpec, alignedSpec, originalSpecPath);
     } else {
         utils:logVerbose("generating sanitations.md documentation");
-        content = check buildSanitationsContent(originalSpec, alignedSpec);
+        content = check buildSanitationsContent(originalSpec, alignedSpec, originalSpecPath);
     }
 
     check io:fileWriteString(sanitationsPath, content);
@@ -361,13 +361,21 @@ function parseModifiedSpec(string raw) returns json|error {
 // MARKDOWN GENERATION — fresh (no existing file)
 // ─────────────────────────────────────────────────────────────
 
-function buildSanitationsContent(json originalSpec, json alignedSpec) returns string|error {
+function buildSanitationsContent(json originalSpec, json alignedSpec, string originalSpecPath) returns string|error {
     string[] sectionBlocks = buildAutoDetectedSections(originalSpec, alignedSpec, 1);
+    string today = todayString();
     string[] lines = [];
 
+    lines.push(string `_Author_: <!-- TODO: Add author name -->`);
+    lines.push(string `_Created_: ${today} \\`);
+    lines.push(string `_Updated_: ${today} \\`);
+    lines.push("_Edition_: Swan Lake");
+    lines.push("");
     lines.push("# Sanitation for OpenAPI specification");
     lines.push("");
     lines.push("This document records the sanitation done on top of the official OpenAPI specification.");
+    lines.push("The OpenAPI specification is obtained from (TODO: Add source link).");
+    lines.push("These changes are done in order to improve the overall usability, and as workarounds for some known language limitations.");
     lines.push("");
 
     foreach string block in sectionBlocks {
@@ -375,7 +383,7 @@ function buildSanitationsContent(json originalSpec, json alignedSpec) returns st
         lines.push("");
     }
 
-    lines.push(buildFooter());
+    lines.push(buildFooter(originalSpecPath));
     return string:'join("\n", ...lines);
 }
 
@@ -384,17 +392,17 @@ function buildSanitationsContent(json originalSpec, json alignedSpec) returns st
 // ─────────────────────────────────────────────────────────────
 
 // Preserve human-authored sections; replace stale auto-generated sections with fresh detection.
-function mergeWithExistingSanitations(string existing, json originalSpec, json alignedSpec) returns string|error {
+function mergeWithExistingSanitations(string existing, json originalSpec, json alignedSpec, string originalSpecPath) returns string|error {
     string header = extractFileHeader(existing);
     string[] existingSections = extractNumberedSections(existing);
-    string footer = extractFileFooter(existing);
 
     string updatedHeader = updateDateInHeader(header);
 
-    // Separate human-authored sections from previously auto-generated ones
+    // Separate human-authored sections from previously auto-generated ones.
+    // Also drop empty placeholder sections (e.g. "1. \n\n") that carry no content.
     string[] humanSections = [];
     foreach string section in existingSections {
-        if !section.includes("<!-- auto-generated -->") {
+        if !section.includes("<!-- auto-generated -->") && !isEmptySection(section) {
             humanSections.push(section);
         }
     }
@@ -418,12 +426,13 @@ function mergeWithExistingSanitations(string existing, json originalSpec, json a
 
     string[] renumbered = renumberSections(allSections);
 
-    string[] parts = [updatedHeader, ""];
+    string cleanedHeader = removeTemplateTodoLines(updatedHeader);
+    string[] parts = [cleanedHeader, ""];
     foreach string s in renumbered {
         parts.push(s);
         parts.push("");
     }
-    parts.push(footer);
+    parts.push(buildFooter(originalSpecPath));
 
     return string:'join("\n", ...parts);
 }
@@ -496,8 +505,20 @@ function buildAutoDetectedSections(json originalSpec, json alignedSpec, int star
     return markedBlocks;
 }
 
-function buildFooter() returns string {
-    return "## OpenAPI cli command\n\nThe following command was used to generate the Ballerina client from the OpenAPI specification.\nThe command should be executed from the repository root directory.\n\n```bash\nbal openapi -i docs/spec/openapi.json -o ballerina --mode client --license docs/license.txt\n```\n\nNote: The license year is hardcoded to 2025, change if necessary.";
+function buildFooter(string specPath) returns string {
+    int? docsIdx = specPath.indexOf("docs/");
+    string relPath = docsIdx is int ? specPath.substring(docsIdx) : specPath;
+    string cmd = string `bal openapi -i ${relPath} -o ballerina --mode client --license docs/license.txt`;
+    return string `## OpenAPI cli command
+
+The following command was used to generate the Ballerina client from the OpenAPI specification.
+The command should be executed from the repository root directory.
+
+${"```"}bash
+${cmd}
+${"```"}
+
+Note: The license year is hardcoded to 2025, change if necessary.`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -563,21 +584,6 @@ function extractNumberedSections(string content) returns string[] {
     return sections;
 }
 
-// Everything from the first ## heading (footer) to end of file
-function extractFileFooter(string content) returns string {
-    string[] lines = regex:split(content, "\n");
-    int footerStart = lines.length();
-    foreach int i in 0 ..< lines.length() {
-        if lines[i].trim().startsWith("## ") {
-            footerStart = i;
-            break;
-        }
-    }
-    if footerStart >= lines.length() {
-        return buildFooter();
-    }
-    return string:'join("\n", ...lines.slice(footerStart));
-}
 
 // Rewrite the section numbers (1. 2. 3. ...) to be sequential
 function renumberSections(string[] sections) returns string[] {
@@ -595,13 +601,39 @@ function renumberSections(string[] sections) returns string[] {
     return result;
 }
 
-// Update _Updated_: YYYY/MM/DD in header to today's date
-function updateDateInHeader(string header) returns string {
+function todayString() returns string {
     time:Civil today = time:utcToCivil(time:utcNow());
     string month = today.month < 10 ? string `0${today.month}` : today.month.toString();
     string day = today.day < 10 ? string `0${today.day}` : today.day.toString();
-    string dateStr = string `${today.year}/${month}/${day}`;
-    return regex:replaceAll(header, "_Updated_:.*", string `_Updated_: ${dateStr} \\`);
+    return string `${today.year}/${month}/${day}`;
+}
+
+// Update date fields in the header. Always refreshes _Updated_; fills _Created_ if still a TODO.
+function updateDateInHeader(string header) returns string {
+    string today = todayString();
+    string withUpdated = regex:replaceAll(header, "_Updated_:.*", string `_Updated_: ${today} \\`);
+    return regex:replaceAll(withUpdated, "_Created_:[ \t]*<!--.*-->[ \t]*\\\\?", string `_Created_: ${today} \\`);
+}
+
+// Remove [//]: # (TODO: ...) comment lines left over from old templates
+function removeTemplateTodoLines(string header) returns string {
+    string[] lines = regex:split(header, "\n");
+    string[] kept = [];
+    foreach string line in lines {
+        if !line.trim().startsWith("[//]: #") {
+            kept.push(line);
+        }
+    }
+    return string:'join("\n", ...kept);
+}
+
+// True if a numbered section has no meaningful content after the "N." prefix
+function isEmptySection(string section) returns boolean {
+    int? dot = section.indexOf(".");
+    if dot is int {
+        return section.substring(dot + 1).trim() == "";
+    }
+    return true;
 }
 
 // True if the new section's key signal is already present in the existing file text
