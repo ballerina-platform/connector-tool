@@ -19,7 +19,11 @@ import ballerina/os;
 import ballerina/regex;
 import ballerina/time;
 
-public function executeCommand(string command, string workingDir) returns CommandResult {
+// Monotonically increasing counter to keep temp-file names unique within a
+// single process even when two commands start in the same second.
+int tempFileSeq = 0;
+
+public function executeCommand(string command, string workingDir, int timeoutSeconds = 1800) returns CommandResult {
     time:Utc startTime = time:utcNow();
     logVerbose(string `executing: ${command}`);
 
@@ -49,15 +53,20 @@ public function executeCommand(string command, string workingDir) returns Comman
         if stderr == "" {
             string tempDir = "/tmp";
             int timestamp = <int>time:utcNow()[0];
-            string stdoutFile = string `${tempDir}/bal_stdout_${timestamp}.txt`;
-            string stderrFile = string `${tempDir}/bal_stderr_${timestamp}.txt`;
+            tempFileSeq += 1;
+            int seq = tempFileSeq;
+            string stdoutFile = string `${tempDir}/bal_stdout_${timestamp}_${seq}.txt`;
+            string stderrFile = string `${tempDir}/bal_stderr_${timestamp}_${seq}.txt`;
 
             string[] commandParts = regex:split(command, " ");
             if commandParts.length() == 0 {
                 stderr = "Empty command";
                 exitCode = 1;
             } else {
-                string redirectedCommand = string `cd "${workingDir}" && ${command} > "${stdoutFile}" 2> "${stderrFile}"`;
+                // Portable watchdog (no GNU `timeout` dependency): run the command in the
+                // background, and a sibling sleep-then-kill process that fires after the
+                // timeout. A killed command exits 137, which we translate below.
+                string redirectedCommand = string `cd "${workingDir}" && { ${command} > "${stdoutFile}" 2> "${stderrFile}" & } ; cmdpid=$! ; ( sleep ${timeoutSeconds} ; kill -9 $cmdpid 2>/dev/null ) & wdpid=$! ; wait $cmdpid ; rc=$? ; kill $wdpid 2>/dev/null ; exit $rc`;
 
                 os:Command cmd = {
                     value: "sh",
@@ -85,6 +94,12 @@ public function executeCommand(string command, string workingDir) returns Comman
                         } else {
                             stderr = "";
                             logVerbose(string `failed to read stderr file: ${stderrContent.message()}`);
+                        }
+
+                        // Exit 137 = SIGKILL from the watchdog → the command timed out.
+                        if exitCode == 137 {
+                            stderr = string `${stderr}${stderr.trim().length() > 0 ? "\n" : ""}command timed out after ${timeoutSeconds}s`;
+                            logWarn(string `command timed out after ${timeoutSeconds}s: ${command}`);
                         }
 
                         do { check file:remove(stdoutFile); } on fail { }

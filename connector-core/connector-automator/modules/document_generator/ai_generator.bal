@@ -241,85 +241,27 @@ function generateMainContent(ConnectorMetadata metadata) returns map<string>|err
     return content;
 }
 
-// Template processing functions
+// Template processing functions.
+// Every placeholder is always replaced — even when its value is empty — so that
+// no literal {{PLACEHOLDER}} token can leak into a published README.
 function substituteVariables(string template, TemplateData data) returns string {
     string result = template;
 
-    // Simple string replacement function
-    string connectorName = data.CONNECTOR_NAME ?: "";
-    if connectorName != "" {
-        result = simpleReplace(result, "{{CONNECTOR_NAME}}", connectorName);
-    }
-
-    string version = data.VERSION ?: "";
-    if version != "" {
-        result = simpleReplace(result, "{{VERSION}}", version);
-    }
-
-    string description = data.DESCRIPTION ?: "";
-    if description != "" {
-        result = simpleReplace(result, "{{DESCRIPTION}}", description);
-    }
-
-    string overview = data.AI_GENERATED_OVERVIEW ?: "";
-    if overview != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_OVERVIEW}}", overview);
-    }
-
-    string setup = data.AI_GENERATED_SETUP ?: "";
-    if setup != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_SETUP}}", setup);
-    }
-
-    string quickstart = data.AI_GENERATED_QUICKSTART ?: "";
-    if quickstart != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_QUICKSTART}}", quickstart);
-    }
-
-    string examples = data.AI_GENERATED_EXAMPLES ?: "";
-    if examples != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_EXAMPLES}}", examples);
-    }
-
-    string usage = data.AI_GENERATED_USAGE ?: "";
-    if usage != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_USAGE}}", usage);
-    }
-
-    string testingApproach = data.AI_GENERATED_TESTING_APPROACH ?: "";
-    if testingApproach != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_TESTING_APPROACH}}", testingApproach);
-    }
-
-    string exampleDescriptions = data.AI_GENERATED_EXAMPLE_DESCRIPTIONS ?: "";
-    if exampleDescriptions != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_EXAMPLE_DESCRIPTIONS}}", exampleDescriptions);
-    }
-
-    string gettingStarted = data.AI_GENERATED_GETTING_STARTED ?: "";
-    if gettingStarted != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_GETTING_STARTED}}", gettingStarted);
-    }
-
-    string headerAndBadges = data.AI_GENERATED_HEADER_AND_BADGES ?: "";
-    if headerAndBadges != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_HEADER_AND_BADGES}}", headerAndBadges);
-    }
-
-    string usefulLinks = data.AI_GENERATED_USEFUL_LINKS ?: "";
-    if usefulLinks != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_USEFUL_LINKS}}", usefulLinks);
-    }
-
-    string individualReadme = data.AI_GENERATED_INDIVIDUAL_README ?: "";
-    if individualReadme != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_INDIVIDUAL_README}}", individualReadme);
-    }
-
-    string mainExamplesReadme = data.AI_GENERATED_MAIN_EXAMPLES_README ?: "";
-    if mainExamplesReadme != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_MAIN_EXAMPLES_README}}", mainExamplesReadme);
-    }
+    result = simpleReplace(result, "{{CONNECTOR_NAME}}", data.CONNECTOR_NAME ?: "");
+    result = simpleReplace(result, "{{VERSION}}", data.VERSION ?: "");
+    result = simpleReplace(result, "{{DESCRIPTION}}", data.DESCRIPTION ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_OVERVIEW}}", data.AI_GENERATED_OVERVIEW ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_SETUP}}", data.AI_GENERATED_SETUP ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_QUICKSTART}}", data.AI_GENERATED_QUICKSTART ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_EXAMPLES}}", data.AI_GENERATED_EXAMPLES ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_USAGE}}", data.AI_GENERATED_USAGE ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_TESTING_APPROACH}}", data.AI_GENERATED_TESTING_APPROACH ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_EXAMPLE_DESCRIPTIONS}}", data.AI_GENERATED_EXAMPLE_DESCRIPTIONS ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_GETTING_STARTED}}", data.AI_GENERATED_GETTING_STARTED ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_HEADER_AND_BADGES}}", data.AI_GENERATED_HEADER_AND_BADGES ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_USEFUL_LINKS}}", data.AI_GENERATED_USEFUL_LINKS ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_INDIVIDUAL_README}}", data.AI_GENERATED_INDIVIDUAL_README ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_MAIN_EXAMPLES_README}}", data.AI_GENERATED_MAIN_EXAMPLES_README ?: "");
 
     return result;
 }
@@ -361,27 +303,39 @@ function writeKeywordsToToml(string connectorPath, string[] keywords) returns er
     string[] quoted = from string kw in keywords select string `"${kw}"`;
     string keywordsLine = string `keywords = [${strings:'join(", ", ...quoted)}]`;
 
-    string updated;
-    if content.includes("keywords") {
-        // Replace the existing keywords line
-        string[] lines = regexp:split(re `\n`, content);
-        string[] newLines = [];
-        foreach string line in lines {
-            if strings:trim(line).startsWith("keywords") {
-                newLines.push(keywordsLine);
-            } else {
-                newLines.push(line);
-            }
+    string[] lines = regexp:split(re `\n`, content);
+
+    // Pass 1: replace an existing top-level keywords line if present.
+    boolean replaced = false;
+    string[] afterReplace = [];
+    foreach string line in lines {
+        if strings:trim(line).startsWith("keywords") {
+            afterReplace.push(keywordsLine);
+            replaced = true;
+        } else {
+            afterReplace.push(line);
         }
-        updated = strings:'join("\n", ...newLines);
+    }
+
+    string updated;
+    if replaced {
+        updated = strings:'join("\n", ...afterReplace);
     } else {
-        // Insert after the version line
-        string[] lines = regexp:split(re `\n`, content);
+        // Pass 2: insert once after the version line inside [package] only.
+        // Platform dependency tables also contain version = lines; inserting after
+        // each of those would produce duplicate keys and invalid TOML.
+        boolean inPackage = false;
+        boolean inserted = false;
         string[] newLines = [];
         foreach string line in lines {
+            string trimmed = strings:trim(line);
+            if trimmed.startsWith("[") {
+                inPackage = trimmed == "[package]";
+            }
             newLines.push(line);
-            if strings:trim(line).startsWith("version") {
+            if inPackage && !inserted && trimmed.startsWith("version") {
                 newLines.push(keywordsLine);
+                inserted = true;
             }
         }
         updated = strings:'join("\n", ...newLines);
