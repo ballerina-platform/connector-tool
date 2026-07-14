@@ -15,7 +15,7 @@
 
 import wso2/connector_automator.utils;
 
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 // Helper function to update description in spec using a segment-array location.
 // Segments (e.g. ["User", "properties", "user.name"]) are pre-split so property
@@ -212,9 +212,9 @@ function updateNestedDescription(map<json> current, string[] pathParts, int inde
 
     if part.includes("[") {
         // Handle array indices like "allOf[0]"
-        string[] indexParts = regex:split(part, "\\[");
+        string[] indexParts = regexp:split(re `\[`, part);
         string arrayName = indexParts[0];
-        string indexStr = regex:replaceAll(indexParts[1], "\\]", "");
+        string indexStr = regexp:replaceAll(re `\]`, indexParts[1], "");
         int|error indexResult = int:fromString(indexStr);
 
         if indexResult is int {
@@ -321,7 +321,7 @@ function updateResponseDescriptionInSpec(map<json> paths, string location, strin
         string locationWithoutPrefix = location.substring(6); // Remove "paths."
 
         // Split by dots, but be careful with path segments that might contain dots
-        string[] locationParts = regex:split(locationWithoutPrefix, "\\.");
+        string[] locationParts = regexp:split(re `\.`, locationWithoutPrefix);
 
         if locationParts.length() >= 5 { // minimum: path, method, "responses", responseCode, "description"
             // Last three parts are always "responses", responseCode, "description"

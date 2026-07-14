@@ -16,7 +16,7 @@
 
 import ballerina/io;
 import ballerina/file;
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 type TypeDefinition record {|
     string content;
@@ -27,26 +27,26 @@ type TypeDefinition record {|
 |};
 
 function extractTypeName(string line) returns string {
-    string trimmed = regex:replaceAll(line.trim(), "\\s+", " ");
-    string[] tokens = regex:split(trimmed, " ");
+    string trimmed = regexp:replaceAll(re `\s+`, line.trim(), " ");
+    string[] tokens = regexp:split(re ` `, trimmed);
 
     foreach int i in 0 ..< tokens.length() {
         if tokens[i] == "type" {
             if i + 1 < tokens.length() {
                 string name = tokens[i + 1];
-                name = regex:replaceAll(name, "[=;].*$", "");
+                name = regexp:replaceAll(re `[=;].*$`, name, "");
                 return name;
             }
         } else if tokens[i] == "const" {
             if i + 2 < tokens.length() && tokens[i + 2] == "=" {
                 // const NAME = value (no explicit type keyword)
                 string name = tokens[i + 1];
-                name = regex:replaceAll(name, "[=;].*$", "");
+                name = regexp:replaceAll(re `[=;].*$`, name, "");
                 return name;
             } else if i + 2 < tokens.length() {
                 // const TYPE NAME = value
                 string name = tokens[i + 2];
-                name = regex:replaceAll(name, "[=;].*$", "");
+                name = regexp:replaceAll(re `[=;].*$`, name, "");
                 return name;
             }
         }
@@ -110,7 +110,7 @@ function buildMultiLineType(string[] lines, string firstLine, string typeName, i
 }
 
 function extractAllTypes(string content) returns [TypeDefinition[], int, int] {
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
     TypeDefinition[] typeDefs = [];
 
     int firstTypeLine = -1;
@@ -121,7 +121,7 @@ function extractAllTypes(string content) returns [TypeDefinition[], int, int] {
         string line = lines[i];
         string stripped = line.trim();
 
-        if !regex:matches(stripped, "public\\s+(type|const)\\b.*") {
+        if !regexp:isFullMatch(re `public\s+(type|const)(\s.*|$)`, stripped) {
             i += 1;
             continue;
         }
@@ -198,7 +198,7 @@ function sortTypeDefinitions(TypeDefinition[] types) returns TypeDefinition[] {
 
 function sortAndWriteType(string inputPath, string outputPath) returns error? {
     string content = check io:fileReadString(inputPath);
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
 
     [TypeDefinition[], int, int] result = extractAllTypes(content);
     TypeDefinition[] typeDefs = result[0];

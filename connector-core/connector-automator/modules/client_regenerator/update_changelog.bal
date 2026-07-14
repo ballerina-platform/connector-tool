@@ -16,7 +16,7 @@
 
 import ballerina/file;
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 function safeSubstring(string str, int startIndex, int endIndex) returns string {
     int actualEnd = endIndex < str.length() ? endIndex : str.length();
@@ -33,7 +33,7 @@ function parsePrDescription(string prDescription) returns map<string[]>|error {
         "Fixed": []
     };
 
-    string[] lines = regex:split(prDescription, "\n");
+    string[] lines = regexp:split(re `\n`, prDescription);
     string currentSection = "";
 
     foreach string line in lines {
@@ -147,7 +147,7 @@ function updateChangelog(string prDescription) returns error? {
     if existingFile is string {
         io:fprintln(io:stderr, "Updating existing CHANGELOG.md");
         string content = check io:fileReadString(changelogPath);
-        string[] lines = regex:split(content, "\n");
+        string[] lines = regexp:split(re `\n`, content);
 
         int unreleasedIndex = -1;
         foreach int i in 0 ..< lines.length() {
@@ -172,7 +172,7 @@ function updateChangelog(string prDescription) returns error? {
                 updatedLines.push(lines[i]);
             }
 
-            string[] newSectionLines = regex:split(newUnreleasedSection, "\n");
+            string[] newSectionLines = regexp:split(re `\n`, newUnreleasedSection);
             foreach string line in newSectionLines {
                 updatedLines.push(line);
             }
@@ -204,7 +204,7 @@ function updateChangelog(string prDescription) returns error? {
                 updatedLines.push("");
             }
 
-            string[] newSectionLines = regex:split(newUnreleasedSection, "\n");
+            string[] newSectionLines = regexp:split(re `\n`, newUnreleasedSection);
             foreach string line in newSectionLines {
                 updatedLines.push(line);
             }

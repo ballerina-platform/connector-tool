@@ -15,7 +15,7 @@
 
 import ballerina/io;
 import ballerina/log;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import wso2/connector_automator.utils;
 
 # Use Anthropic LLM to find root client class using weighted scoring
@@ -1143,7 +1143,7 @@ function extractSdkNameFromClass(ClassInfo rootClient) returns string {
         return "Java SDK";
     }
 
-    string[] parts = regex:split(packageName, "\\.");
+    string[] parts = regexp:split(re `\.`, packageName);
     // Find the last meaningful segment — skip version-like segments (v1, v2, v1beta1)
     // and very short tokens so the SDK name reflects the service, not an API version.
     string last = "";
@@ -1261,7 +1261,7 @@ function shouldConsiderAsClientCandidate(ClassInfo cls) returns boolean {
 
     // Determine nesting depth from $ separators.
     // Inner classes in Java class files use $ as the separator between outer and inner name.
-    string[] classSegments = regex:split(className, "\\$");
+    string[] classSegments = regexp:split(re `\$`, className);
     int dollarCount = classSegments.length() - 1;
 
     // Skip deeply nested inner classes (two or more $ levels) — these are implementation details
@@ -1361,7 +1361,7 @@ function shouldConsiderAsClientCandidate(ClassInfo cls) returns boolean {
 # + packageLower - Lower-cased package name
 # + return - True if a matching segment is found
 function matchesPackageServiceSegment(string simpleNameLower, string packageLower) returns boolean {
-    string[] parts = regex:split(packageLower, "\\.");
+    string[] parts = regexp:split(re `\.`, packageLower);
     foreach string part in parts {
         // Skip generic short segments
         if part.length() <= 2 {
@@ -1458,7 +1458,7 @@ function detectInitPatternWithLLM(
 
         if responseResult is string {
             string responseText = responseResult;
-            string[] lines = regex:split(responseText, "\n");
+            string[] lines = regexp:split(re `\n`, responseText);
             string patternName = "";
             string reason = "";
 
@@ -1530,7 +1530,7 @@ function rankMethodsUsingLLM(MethodInfo[] methods) returns MethodInfo[]|error {
         string responseText = responseResult;
 
         // Parse the comma-separated method names
-        string[] rankedNames = regex:split(responseText, ",");
+        string[] rankedNames = regexp:split(re `,`, responseText);
         string[] trimmedNames = rankedNames.map(n => n.trim()).filter(n => n.length() > 0);
 
         if trimmedNames.length() > 0 {
@@ -1620,7 +1620,7 @@ function addMethodDescriptions(MethodInfo[] methods) returns MethodInfo[]|error 
     if responseResult is string {
         string responseText = responseResult.trim();
         if responseText != "" {
-            string[] descriptions = regex:split(responseText, "\n");
+            string[] descriptions = regexp:split(re `\n`, responseText);
             descriptions = descriptions.map(d => d.trim()).filter(d => d.length() > 0);
 
             // Apply LLM descriptions only to methods that needed them
@@ -1666,7 +1666,7 @@ function selectTopNMethodsWithLLM(MethodInfo[] methods, int n) returns MethodInf
         string responseText = responseResult.trim();
 
         // Parse comma-separated method names
-        string[] parts = regex:split(responseText, ",");
+        string[] parts = regexp:split(re `,`, responseText);
         string[] trimmed = parts.map(p => p.trim()).filter(p => p.length() > 0);
 
         if trimmed.length() == 0 {

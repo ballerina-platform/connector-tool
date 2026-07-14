@@ -14,7 +14,7 @@
 // under the License.
 
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerina/time;
 
 # Execute SDK Analyzer from command-line arguments.
@@ -130,14 +130,14 @@ function parseCommandLineArgs(string[] args) returns AnalyzerConfig {
                         match key {
                             "exclude-packages"|"--exclude-packages" => {
                                 if value.length() > 0 {
-                                    config.excludePackages = regex:split(value, ",")
+                                    config.excludePackages = regexp:split(re `,`, value)
                                         .map(pkg => pkg.trim())
                                         .filter(pkg => pkg.length() > 0);
                                 }
                             }
                             "include-packages"|"--include-packages" => {
                                 if value.length() > 0 {
-                                    config.includePackages = regex:split(value, ",")
+                                    config.includePackages = regexp:split(re `,`, value)
                                         .map(pkg => pkg.trim())
                                         .filter(pkg => pkg.length() > 0);
                                 }

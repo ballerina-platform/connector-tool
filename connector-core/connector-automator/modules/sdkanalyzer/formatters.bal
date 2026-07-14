@@ -13,7 +13,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 # Format class information for LLM analysis
 #
@@ -95,7 +95,7 @@ public function formatMethodsListForRanking(MethodInfo[] methods) returns string
         if m.parameters.length() > 0 && m.parameters.length() <= 3 {
             string[] paramTypes = [];
             foreach ParameterInfo p in m.parameters {
-                string[] parts = regex:split(p.typeName, "\\.");
+                string[] parts = regexp:split(re `\.`, p.typeName);
                 paramTypes.push(parts[parts.length() - 1]);
             }
             paramInfo = string:'join(", ", ...paramTypes);

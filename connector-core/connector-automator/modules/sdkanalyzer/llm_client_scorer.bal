@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 import wso2/connector_automator.utils;
 
@@ -54,7 +54,7 @@ function callLLMForClientScoring(ClassInfo cls, ClassInfo[] allClasses, string? 
     }
     string responseText = responseResult;
 
-    string[] matches = regex:split(responseText, "\\|");
+    string[] matches = regexp:split(re `\|`, responseText);
     int? scoreStart = responseText.indexOf("SCORE:");
     if scoreStart is int {
         string scoreRemainder = responseText.substring(scoreStart + 6).trim();

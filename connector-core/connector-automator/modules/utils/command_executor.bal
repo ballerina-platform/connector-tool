@@ -17,7 +17,7 @@ import ballerina/file;
 import ballerina/io;
 import ballerina/os;
 import ballerina/random;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerina/time;
 
 public function executeCommand(string command, string workingDir, int timeoutSeconds = 1800) returns CommandResult {
@@ -50,12 +50,12 @@ public function executeCommand(string command, string workingDir, int timeoutSec
         if stderr == "" {
             int|random:Error randomResult = random:createIntInRange(0, 2147483647);
             int randomSuffix = randomResult is int ? randomResult : 0;
-            string tempDir = string `/tmp/bal_exec_${startTime[0]}_${regex:replaceAll(startTime[1].toString(), "\\.", "_")}_${randomSuffix}`;
+            string tempDir = string `/tmp/bal_exec_${startTime[0]}_${regexp:replaceAll(re `\.`, startTime[1].toString(), "_")}_${randomSuffix}`;
             error? dirCreated = file:createDir(tempDir, file:RECURSIVE);
             string stdoutFile = string `${tempDir}/stdout.txt`;
             string stderrFile = string `${tempDir}/stderr.txt`;
 
-            string[] commandParts = regex:split(command, " ");
+            string[] commandParts = regexp:split(re ` `, command);
             if commandParts.length() == 0 {
                 stderr = "Empty command";
                 exitCode = 1;
@@ -152,7 +152,7 @@ public function getDirectoryPath(string filePath) returns string {
 public function parseCmdCompilationErrors(string output) returns CmdCompilationError[] {
     CmdCompilationError[] errors = [];
 
-    string[] lines = regex:split(output, "\n");
+    string[] lines = regexp:split(re `\n`, output);
 
     foreach string line in lines {
         if (line.includes("ERROR [") || line.includes("WARNING [")) && line.includes(")]") {
@@ -171,9 +171,9 @@ public function parseCmdCompilationErrors(string output) returns CmdCompilationE
                     string fileName = errorPart.substring(0, coordStart);
                     string coordinates = errorPart.substring(coordStart + 2);
 
-                    string[] coordParts = regex:split(coordinates, ",");
+                    string[] coordParts = regexp:split(re `,`, coordinates);
                     if coordParts.length() > 0 {
-                        string[] lineCol = regex:split(coordParts[0], ":");
+                        string[] lineCol = regexp:split(re `:`, coordParts[0]);
                         if lineCol.length() >= 2 {
                             int|error lineNum = int:fromString(lineCol[0]);
                             int|error col = int:fromString(lineCol[1]);

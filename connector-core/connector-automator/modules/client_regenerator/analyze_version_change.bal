@@ -18,7 +18,7 @@ import ballerina/ai;
 import ballerina/io;
 import ballerina/lang.value;
 import ballerina/os;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerinax/ai.anthropic;
 
 const string SEPARATOR = "============================================================";
@@ -79,7 +79,7 @@ function buildModel() returns ai:ModelProvider|error {
 }
 
 function parseAnalysisResponse(string raw) returns AnalysisResult|error {
-    string cleaned = regex:replaceAll(raw.trim(), "```json|```", "");
+    string cleaned = regexp:replaceAll(re `\u{60}\u{60}\u{60}json|\u{60}\u{60}\u{60}`, raw.trim(), "");
     return check value:fromJsonStringWithType(cleaned.trim());
 }
 

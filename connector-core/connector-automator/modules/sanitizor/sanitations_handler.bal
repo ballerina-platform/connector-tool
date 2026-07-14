@@ -19,7 +19,7 @@ import wso2/connector_automator.utils;
 import ballerina/ai;
 import ballerina/file;
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerina/time;
 import ballerina/yaml;
 
@@ -527,11 +527,11 @@ Note: The license year is hardcoded to 2025, change if necessary.`;
 
 // Everything before the first numbered section (author, created, intro paragraph, etc.)
 function extractFileHeader(string content) returns string {
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
     int firstSection = lines.length();
     foreach int i in 0 ..< lines.length() {
         string trimmedLine = lines[i].trim();
-        if regex:matches(trimmedLine, "[0-9]+\\..*") || trimmedLine.startsWith("## ") {
+        if regexp:isFullMatch(re `[0-9]+\..*`, trimmedLine) || trimmedLine.startsWith("## ") {
             firstSection = i;
             break;
         }
@@ -551,7 +551,7 @@ function extractFileHeader(string content) returns string {
 // Each numbered block as a separate string (without the trailing blank line)
 function extractNumberedSections(string content) returns string[] {
     string[] sections = [];
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
 
     int i = 0;
     while i < lines.length() {
@@ -560,12 +560,12 @@ function extractNumberedSections(string content) returns string[] {
         if line.startsWith("## ") {
             break;
         }
-        if regex:matches(line, "[0-9]+\\..*") {
+        if regexp:isFullMatch(re `[0-9]+\..*`, line) {
             string[] block = [lines[i]];
             int j = i + 1;
             while j < lines.length() {
                 string next = lines[j].trim();
-                if regex:matches(next, "[0-9]+\\..*") || next.startsWith("## ") {
+                if regexp:isFullMatch(re `[0-9]+\..*`, next) || next.startsWith("## ") {
                     break;
                 }
                 block.push(lines[j]);
@@ -612,13 +612,13 @@ function todayString() returns string {
 // Update date fields in the header. Always refreshes _Updated_; fills _Created_ if still a TODO.
 function updateDateInHeader(string header) returns string {
     string today = todayString();
-    string withUpdated = regex:replaceAll(header, "_Updated_:.*", string `_Updated_: ${today} \\`);
-    return regex:replaceAll(withUpdated, "_Created_:[ \t]*<!--.*-->[ \t]*\\\\?", string `_Created_: ${today} \\`);
+    string withUpdated = regexp:replaceAll(re `_Updated_:.*`, header, string `_Updated_: ${today} \\`);
+    return regexp:replaceAll(re `_Created_:[ \t]*<!--.*-->[ \t]*\\?`, withUpdated, string `_Created_: ${today} \\`);
 }
 
 // Remove [//]: # (TODO: ...) comment lines left over from old templates
 function removeTemplateTodoLines(string header) returns string {
-    string[] lines = regex:split(header, "\n");
+    string[] lines = regexp:split(re `\n`, header);
     string[] kept = [];
     foreach string line in lines {
         string trimmedLine = line.trim();
@@ -707,14 +707,14 @@ function isSectionAlreadyCovered(string newSection, string existingLower) return
 
 function parseSanitationsMarkdown(string content) returns SanitationRules {
     SanitationRules rules = {};
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
 
     int i = 0;
     while i < lines.length() {
         string line = lines[i].trim();
 
         // Match numbered list items like "1. ..." or "12. ..."
-        if regex:matches(line, "[0-9]+\\..*") {
+        if regexp:isFullMatch(re `[0-9]+\..*`, line) {
             string sectionTitle = line.toLowerAscii();
 
             // Collect the whole block until the next numbered item
@@ -722,7 +722,7 @@ function parseSanitationsMarkdown(string content) returns SanitationRules {
             int j = i + 1;
             while j < lines.length() {
                 string nextLine = lines[j].trim();
-                if regex:matches(nextLine, "[0-9]+\\..*") {
+                if regexp:isFullMatch(re `[0-9]+\..*`, nextLine) {
                     break;
                 }
                 blockLines.push(lines[j]);
@@ -904,7 +904,7 @@ function parseNullabilityBlock(string[] lines) returns NullabilityChange? {
         string titleLower = titleLine.toLowerAscii();
         string[] backtickVals = extractAllBacktickValues(titleLine);
         if backtickVals.length() >= 1 {
-            string[] nameParts = regex:split(backtickVals[0], " ");
+            string[] nameParts = regexp:split(re ` `, backtickVals[0]);
             if nameParts.length() >= 2 {
                 schemaName = nameParts[0];
                 fieldName = nameParts[1];
@@ -948,7 +948,7 @@ function parseTypeChangeBlock(string[] lines) returns TypeChange? {
                 schemaName = token.substring(0, dotPos);
                 fieldName = token.substring(dotPos + 1);
             } else {
-                string[] nameParts = regex:split(token, " ");
+                string[] nameParts = regexp:split(re ` `, token);
                 if nameParts.length() >= 2 {
                     schemaName = nameParts[0];
                     fieldName = nameParts[1];
@@ -1507,5 +1507,5 @@ function cleanFormatValue(string raw) returns string {
         return afterColon.trim();
     }
     // Plain value (no key wrapper) — just strip any stray quotes
-    return regex:replaceAll(trimmed, "\"", "").trim();
+    return regexp:replaceAll(re `"`, trimmed, "").trim();
 }

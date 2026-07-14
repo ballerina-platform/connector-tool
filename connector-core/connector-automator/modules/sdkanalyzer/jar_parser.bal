@@ -17,7 +17,7 @@
 import ballerina/file;
 import ballerina/jballerina.java;
 import ballerina/log;
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 # Resolve Maven coordinate or local JAR path
 #
@@ -40,7 +40,7 @@ public function resolveSDKReference(string sdkRef, AnalyzerConfig? config = ()) 
             options["resolveDependencies"] = config.resolveDependencies;
         }
 
-        if regex:split(sdkRef, ":").length() < 3 {
+        if regexp:split(re `:`, sdkRef).length() < 3 {
             return error(string `Maven coordinate must be in groupId:artifactId:version format (e.g. 'software.amazon.awssdk:s3:2.31.66'), got: '${sdkRef}'`);
         }
         json result = check resolveMavenArtifactWithOptions(sdkRef, options);
@@ -816,7 +816,7 @@ function inferMavenCoordinateFromJarPath(string jarPath) returns string? {
         return ();
     }
 
-    string[] parts = regex:split(basename, "-");
+    string[] parts = regexp:split(re `-`, basename);
     if parts.length() < 2 {
         return ();
     }
@@ -857,7 +857,7 @@ function resolveTransitiveJarPaths(string coordinate, int maxDepth) returns stri
         resolveDependencies: true
     };
     do {
-        if regex:split(coordinate, ":").length() < 3 {
+        if regexp:split(re `:`, coordinate).length() < 3 {
             return [];
         }
         json result = check resolveMavenArtifactWithOptions(coordinate, options);

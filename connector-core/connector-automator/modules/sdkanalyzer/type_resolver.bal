@@ -13,7 +13,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 import wso2/connector_automator.utils;
 
@@ -78,46 +78,46 @@ public function normalizeCandidateTypeNames(string raw) returns string[] {
     }
 
     if raw.includes("<") && raw.includes(">") {
-        string[] parts = regex:split(raw, "<|>");
+        string[] parts = regexp:split(re `<|>`, raw);
         if parts.length() >= 2 {
             string inner = parts[1];
             out.push(inner);
         }
-        string withoutGenerics = regex:replace(raw, "<.*>", "");
+        string withoutGenerics = regexp:replace(re `<.*>`, raw, "");
         out.push(withoutGenerics);
     }
 
     out.push(raw);
 
     if raw.endsWith(".Builder") {
-        string removed = regex:replace(raw, "\\.Builder$", "");
+        string removed = regexp:replace(re `\.Builder$`, raw, "");
         out.push(removed);
     } else if raw.endsWith("Builder") {
         if raw.includes("$") {
-            string maybe = regex:replace(raw, "\\$Builder$", "");
+            string maybe = regexp:replace(re `\$Builder$`, raw, "");
             if maybe != raw {
                 out.push(maybe);
             }
         }
-        string stripped = regex:replace(raw, "Builder$", "");
+        string stripped = regexp:replace(re `Builder$`, raw, "");
         out.push(stripped);
     }
 
     if raw.includes("$") {
-        string dotForm = regex:replace(raw, "\\$", ".");
+        string dotForm = regexp:replace(re `\$`, raw, ".");
         out.push(dotForm);
         if dotForm.endsWith(".Builder") {
-            string removedDotBuilder = regex:replace(dotForm, "\\.Builder$", "");
+            string removedDotBuilder = regexp:replace(re `\.Builder$`, dotForm, "");
             out.push(removedDotBuilder);
         }
     }
 
-    string[] parts = regex:split(raw, "\\.");
+    string[] parts = regexp:split(re `\.`, raw);
     if parts.length() > 0 {
         string simple = parts[parts.length() - 1];
         out.push(simple);
         if simple.endsWith("Builder") {
-            string simpleStripped = regex:replace(simple, "Builder$", "");
+            string simpleStripped = regexp:replace(re `Builder$`, simple, "");
             out.push(simpleStripped);
         }
     }
@@ -628,7 +628,7 @@ function deriveEnumLiteralFromConstant(string constantName) returns string {
         return constantName;
     }
 
-    string[] parts = regex:split(constantName, "_");
+    string[] parts = regexp:split(re `_`, constantName);
     string literal = "";
     foreach string part in parts {
         if part.length() == 0 {
@@ -710,7 +710,7 @@ public function addRequestFieldDescriptions(RequestFieldInfo[] fields) returns R
     if responseResult is string {
         string responseText = responseResult.trim();
         if responseText != "" {
-            string[] descriptions = regex:split(responseText, "\n");
+            string[] descriptions = regexp:split(re `\n`, responseText);
             descriptions = descriptions.map(d => d.trim()).filter(d => d.length() > 0);
 
             RequestFieldInfo[] result = fields.clone();

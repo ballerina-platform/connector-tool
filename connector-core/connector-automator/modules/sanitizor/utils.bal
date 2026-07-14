@@ -17,15 +17,15 @@ import wso2/connector_automator.utils;
 
 import ballerina/file;
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerina/yaml;
 
 // Helper function to generate unique request IDs
 function generateRequestId(string schemaName, string path, string requestType) returns string {
-    string cleanPath = regex:replaceAll(path, "_", "_u");
-    cleanPath = regex:replaceAll(cleanPath, "\\.", "_d");
-    cleanPath = regex:replaceAll(cleanPath, "\\[", "_l");
-    cleanPath = regex:replaceAll(cleanPath, "\\]", "_r");
+    string cleanPath = regexp:replaceAll(re `_`, path, "_u");
+    cleanPath = regexp:replaceAll(re `\.`, cleanPath, "_d");
+    cleanPath = regexp:replaceAll(re `\[`, cleanPath, "_l");
+    cleanPath = regexp:replaceAll(re `\]`, cleanPath, "_r");
     return string `${schemaName}_${requestType}_${cleanPath}`;
 }
 
@@ -53,7 +53,7 @@ function isValidSchemaName(string name) returns boolean {
     }
 
     // Should only contain alphanumeric characters
-    return regex:matches(name, "[A-Z][a-zA-Z0-9]*");
+    return regexp:isFullMatch(re `[A-Z][a-zA-Z0-9]*`, name);
 }
 
 // Helper function to check if a name is already taken
@@ -78,10 +78,10 @@ function isNameTaken(string name, string[] existingNames, map<string> nameMappin
 
 // Helper function to generate unique request IDs for operationId requests
 function generateOperationRequestId(string path, string method) returns string {
-    string cleanPath = regex:replaceAll(path, "_", "_u");
-    cleanPath = regex:replaceAll(cleanPath, "\\.", "_d");
-    cleanPath = regex:replaceAll(cleanPath, "\\[", "_l");
-    cleanPath = regex:replaceAll(cleanPath, "\\]", "_r");
+    string cleanPath = regexp:replaceAll(re `_`, path, "_u");
+    cleanPath = regexp:replaceAll(re `\.`, cleanPath, "_d");
+    cleanPath = regexp:replaceAll(re `\[`, cleanPath, "_l");
+    cleanPath = regexp:replaceAll(re `\]`, cleanPath, "_r");
     return string `${method}_${cleanPath}`;
 }
 
@@ -120,7 +120,7 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
     if jsonData is yaml:Error {
         utils:logVerbose(string `Ballerina YAML parser failed, trying yq fallback: ${jsonData.message()}`);
 
-        string escapedPath = "'" + regex:replaceAll(yamlAlignedSpec, "'", "'\\\\''") + "'";
+        string escapedPath = "'" + regexp:replaceAll(re `'`, yamlAlignedSpec, "'\\''") + "'";
 
         utils:CommandResult yqResult = utils:executeCommand(
             string `yq -o=json '.' ${escapedPath}`,
@@ -162,4 +162,3 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
     utils:logVerbose("✓ converted YAML aligned spec to JSON");
     return;
 }
-

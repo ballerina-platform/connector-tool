@@ -15,7 +15,7 @@
 
 import ballerina/ai;
 import ballerina/os;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerinax/ai.anthropic;
 
 string cachedApiKey = "";
@@ -136,7 +136,7 @@ public function getAIModel() returns ai:ModelProvider|error {
 # + return - Extracted JSON object string or error
 public function extractJsonFromLLMResponse(string responseText) returns string|error {
     if responseText.includes("```json") {
-        string[] parts = regex:split(responseText, "```json");
+        string[] parts = regexp:split(re `\u{60}\u{60}\u{60}json`, responseText);
         if parts.length() >= 2 {
             string block = parts[1];
             int? closingIdx = block.indexOf("```");
@@ -148,7 +148,7 @@ public function extractJsonFromLLMResponse(string responseText) returns string|e
     }
 
     if responseText.includes("```") {
-        string[] parts = regex:split(responseText, "```");
+        string[] parts = regexp:split(re `\u{60}\u{60}\u{60}`, responseText);
         if parts.length() >= 3 {
             string block = parts[1].trim();
             int? newline = block.indexOf("\n");

@@ -16,7 +16,7 @@
 
 import ballerina/io;
 import ballerina/file;
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 enum HttpMethod {
     METHOD_GET = "get",
@@ -46,13 +46,13 @@ type ContentBlock record {|
 |};
 
 function extractMethodType(string content) returns string {
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
     if lines.length() == 0 {
         return METHOD_UNKNOWN;
     }
 
-    string firstLine = regex:replaceAll(lines[0].trim(), "\\s+", " ");
-    string[] tokens = regex:split(firstLine, " ");
+    string firstLine = regexp:replaceAll(re `\s+`, lines[0].trim(), " ");
+    string[] tokens = regexp:split(re ` `, firstLine);
 
     boolean isRemote = false;
     foreach string token in tokens {
@@ -102,13 +102,13 @@ function extractHttpMethodFromBody(string content) returns string {
 }
 
 function extractPath(string content) returns string {
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
     if lines.length() == 0 {
         return "";
     }
 
-    string firstLine = regex:replaceAll(lines[0].trim(), "\\s+", " ");
-    string[] tokens = regex:split(firstLine, " ");
+    string firstLine = regexp:replaceAll(re `\s+`, lines[0].trim(), " ");
+    string[] tokens = regexp:split(re ` `, firstLine);
 
     boolean isRemote = false;
     foreach string token in tokens {
@@ -122,7 +122,7 @@ function extractPath(string content) returns string {
         if tokens[i] == "function" && i + 1 < tokens.length() {
             if isRemote {
                 string funcName = tokens[i + 1];
-                string[] nameParts = regex:split(funcName, "\\(");
+                string[] nameParts = regexp:split(re `\(`, funcName);
                 return nameParts.length() > 0 ? nameParts[0] : funcName;
             }
             break;
@@ -132,9 +132,12 @@ function extractPath(string content) returns string {
     foreach int i in 0 ..< tokens.length() {
         if tokens[i] is HttpMethod && i + 1 < tokens.length() {
             string rawPath = tokens[i + 1];
-            string[] pathParts = regex:split(rawPath, "\\(");
+            string[] pathParts = regexp:split(re `\(`, rawPath);
             string path = pathParts.length() > 0 ? pathParts[0] : rawPath;
-            path = regex:replaceAll(path, "\\[[\\w:]+\\s+(\\w+)\\]", "[$1]");
+            path = regexp:replaceAll(re `\[[\w:]+\s+(\w+)\]`, path,
+                isolated function (regexp:Groups groups) returns string {
+                    return "[" + (<regexp:Span>groups[1]).substring() + "]";
+                });
             return path;
         }
     }
@@ -143,8 +146,8 @@ function extractPath(string content) returns string {
 }
 
 function generateSortKey(string methodType, string path) returns [string, string, string] {
-    string normalizedPath = regex:replaceAll(path, "\\\\-", "-");
-    string[] segments = regex:split(normalizedPath, "/");
+    string normalizedPath = regexp:replaceAll(re `\\-`, path, "-");
+    string[] segments = regexp:split(re `/`, normalizedPath);
 
     map<string> methodPriority = {
         [METHOD_GET]: "1",
@@ -168,7 +171,7 @@ function countChar(string str, string char) returns int {
 }
 
 function extractAllBlocks(string content) returns [ContentBlock[], int, int] {
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
     ContentBlock[] blocks = [];
 
     int firstMethodLine = -1;
@@ -178,7 +181,7 @@ function extractAllBlocks(string content) returns [ContentBlock[], int, int] {
     while i < lines.length() {
         string line = lines[i];
 
-        if regex:matches(line, "\\s*(resource\\s+isolated|isolated\\s+resource|remote\\s+isolated|isolated\\s+remote)\\s+function\\s+.*") {
+        if regexp:isFullMatch(re `\s*(resource\s+isolated|isolated\s+resource|remote\s+isolated|isolated\s+remote)\s+function\s+.*`, line) {
             if firstMethodLine == -1 {
                 firstMethodLine = i;
             }
@@ -265,7 +268,7 @@ function sortResourceMethods(ResourceMethod[] methods) returns ResourceMethod[] 
 
 function sortAndWriteClient(string inputPath, string outputPath) returns error? {
     string content = check io:fileReadString(inputPath);
-    string[] lines = regex:split(content, "\n");
+    string[] lines = regexp:split(re `\n`, content);
 
     [ContentBlock[], int, int] result = extractAllBlocks(content);
     ContentBlock[] methodBlocks = result[0];

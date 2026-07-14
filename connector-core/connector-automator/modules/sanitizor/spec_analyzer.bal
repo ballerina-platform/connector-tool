@@ -14,7 +14,7 @@
 // under the License.
 
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 // Helper function to extract API context (info section)
 function extractApiContext(json spec) returns string {
@@ -826,11 +826,11 @@ function getSchemaDescriptionFromSpec(string schemaName, json spec) returns stri
 function encodeSegments(string[] segments) returns string {
     string[] encoded = [];
     foreach string segment in segments {
-        string s = regex:replaceAll(segment, "_", "_u");
-        s = regex:replaceAll(s, "\\.", "_d");
-        s = regex:replaceAll(s, "\\[", "_l");
-        s = regex:replaceAll(s, "\\]", "_r");
-        s = regex:replaceAll(s, "/", "_s");
+        string s = regexp:replaceAll(re `_`, segment, "_u");
+        s = regexp:replaceAll(re `\.`, s, "_d");
+        s = regexp:replaceAll(re `\[`, s, "_l");
+        s = regexp:replaceAll(re `\]`, s, "_r");
+        s = regexp:replaceAll(re `/`, s, "_s");
         encoded.push(s);
     }
     return string:'join("__", ...encoded);

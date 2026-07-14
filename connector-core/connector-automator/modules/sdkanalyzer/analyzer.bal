@@ -16,7 +16,7 @@
 
 import ballerina/file;
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerina/time;
 
 import wso2/connector_automator.utils;
@@ -408,7 +408,7 @@ function buildConstructorSignature(ConstructorInfo constructor) returns string {
 # + jarPath - Path to JAR file
 # + return - Extracted version string
 function extractSdkVersion(string jarPath) returns string {
-    string[] pathParts = regex:split(jarPath, "/");
+    string[] pathParts = regexp:split(re `/`, jarPath);
     string filename = pathParts[pathParts.length() - 1];
 
     // Remove .jar extension
@@ -417,9 +417,9 @@ function extractSdkVersion(string jarPath) returns string {
     }
 
     // Look for version pattern (numbers with dots/dashes)
-    string[] parts = regex:split(filename, "-");
+    string[] parts = regexp:split(re `-`, filename);
     foreach string part in parts.reverse() {
-        if regex:matches(part, "^[0-9]+\\.[0-9]+.*") {
+        if regexp:isFullMatch(re `^[0-9]+\.[0-9]+.*`, part) {
             return part;
         }
     }
@@ -432,12 +432,12 @@ function extractSdkVersion(string jarPath) returns string {
 # + fullName - Full class name
 # + return - Simple class name
 function extractSimpleName(string fullName) returns string {
-    string[] parts = regex:split(fullName, "\\.");
+    string[] parts = regexp:split(re `\.`, fullName);
     return parts[parts.length() - 1];
 }
 
 function extractDatasetKeyFromJarPath(string jarPath) returns string {
-    string[] pathParts = regex:split(jarPath, "/");
+    string[] pathParts = regexp:split(re `/`, jarPath);
     string fileName = pathParts[pathParts.length() - 1];
 
     if fileName.toLowerAscii().endsWith(".jar") {

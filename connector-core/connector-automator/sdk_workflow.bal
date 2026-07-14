@@ -17,7 +17,6 @@ import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
 import ballerina/os;
-import ballerina/regex;
 
 import wso2/connector_automator.api_specification_generator as generator;
 import wso2/connector_automator.code_fixer as fixer;
@@ -202,7 +201,7 @@ function isMavenCoordinate(string sdkRef) returns boolean {
         return false;
     }
 
-    string[] parts = regex:split(sdkRef, ":");
+    string[] parts = regexp:split(re `:`, sdkRef);
     return parts.length() == 2 || parts.length() == 3;
 }
 
@@ -741,7 +740,7 @@ function buildAnalyzerConfig(string[] args, string javadocJar) returns analyzer:
             }
             _ => {
                 if arg.includes("=") {
-                    string[] parts = regex:split(arg, "=");
+                    string[] parts = regexp:split(re `=`, arg);
                     if parts.length() == 2 {
                         string key = parts[0].trim();
                         string value = parts[1].trim();
@@ -749,14 +748,14 @@ function buildAnalyzerConfig(string[] args, string javadocJar) returns analyzer:
                         match key {
                             "exclude-packages"|"--exclude-packages" => {
                                 if value.length() > 0 {
-                                    config.excludePackages = regex:split(value, ",")
+                                    config.excludePackages = regexp:split(re `,`, value)
                                         .map(pkg => pkg.trim())
                                         .filter(pkg => pkg.length() > 0);
                                 }
                             }
                             "include-packages"|"--include-packages" => {
                                 if value.length() > 0 {
-                                    config.includePackages = regex:split(value, ",")
+                                    config.includePackages = regexp:split(re `,`, value)
                                         .map(pkg => pkg.trim())
                                         .filter(pkg => pkg.length() > 0);
                                 }
@@ -834,9 +833,9 @@ function resolveSpecPath(string datasetKey, string outputRoot = "") returns stri
 }
 
 function extractSdkVersionFromDatasetKey(string datasetKey) returns string {
-    string[] parts = regex:split(datasetKey, "-");
+    string[] parts = regexp:split(re `-`, datasetKey);
     foreach string part in parts.reverse() {
-        if regex:matches(part, "^[0-9]+\\.[0-9]+.*") {
+        if regexp:isFullMatch(re `^[0-9]+\.[0-9]+.*`, part) {
             return part;
         }
     }
