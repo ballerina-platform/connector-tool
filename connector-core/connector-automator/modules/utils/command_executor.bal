@@ -19,10 +19,6 @@ import ballerina/os;
 import ballerina/regex;
 import ballerina/time;
 
-// Monotonically increasing counter to keep temp-file names unique within a
-// single process even when two commands start in the same second.
-int tempFileSeq = 0;
-
 public function executeCommand(string command, string workingDir, int timeoutSeconds = 1800) returns CommandResult {
     time:Utc startTime = time:utcNow();
     logVerbose(string `executing: ${command}`);
@@ -51,22 +47,22 @@ public function executeCommand(string command, string workingDir, int timeoutSec
         }
 
         if stderr == "" {
-            string tempDir = "/tmp";
-            int timestamp = <int>time:utcNow()[0];
-            tempFileSeq += 1;
-            int seq = tempFileSeq;
-            string stdoutFile = string `${tempDir}/bal_stdout_${timestamp}_${seq}.txt`;
-            string stderrFile = string `${tempDir}/bal_stderr_${timestamp}_${seq}.txt`;
+            string tempDir = string `/tmp/bal_exec_${startTime[0]}_${regex:replaceAll(startTime[1].toString(), "\\.", "_")}`;
+            do { check file:createDir(tempDir, file:RECURSIVE); } on fail { }
+            string stdoutFile = string `${tempDir}/stdout.txt`;
+            string stderrFile = string `${tempDir}/stderr.txt`;
 
             string[] commandParts = regex:split(command, " ");
             if commandParts.length() == 0 {
                 stderr = "Empty command";
                 exitCode = 1;
             } else {
-                // Portable watchdog (no GNU `timeout` dependency): run the command in the
-                // background, and a sibling sleep-then-kill process that fires after the
-                // timeout. A killed command exits 137, which we translate below.
-                string redirectedCommand = string `cd "${workingDir}" && { ${command} > "${stdoutFile}" 2> "${stderrFile}" & } ; cmdpid=$! ; ( sleep ${timeoutSeconds} ; kill -9 $cmdpid 2>/dev/null ) & wdpid=$! ; wait $cmdpid ; rc=$? ; kill $wdpid 2>/dev/null ; exit $rc`;
+                // Portable watchdog: start the command in an isolated process group,
+                // track an explicit sentinel file when the watchdog fires, and on
+                // timeout terminate the group gracefully (SIGTERM) before forcing it
+                // (SIGKILL). Exit 124 (GNU timeout convention) when the sentinel
+                // confirms the watchdog fired; preserve genuine external kills (OOM).
+                string redirectedCommand = string `wd_marker="${tempDir}/.wd_fired" ; set -m ; cd "${workingDir}" && ${command} > "${stdoutFile}" 2> "${stderrFile}" & cmdpid=$! ; set +m ; ( sleep ${timeoutSeconds} ; touch "$wd_marker" ; kill -TERM -- -$cmdpid 2>/dev/null ; sleep 2 ; kill -9 -- -$cmdpid 2>/dev/null ) & wdpid=$! ; wait $cmdpid ; rc=$? ; kill $wdpid 2>/dev/null ; if [ -f "$wd_marker" ]; then exit 124 ; fi ; exit $rc`;
 
                 os:Command cmd = {
                     value: "sh",
@@ -96,14 +92,15 @@ public function executeCommand(string command, string workingDir, int timeoutSec
                             logVerbose(string `failed to read stderr file: ${stderrContent.message()}`);
                         }
 
-                        // Exit 137 = SIGKILL from the watchdog → the command timed out.
-                        if exitCode == 137 {
+                        // Exit 124 = sentinel confirms watchdog fired → timed out.
+                        if exitCode == 124 {
                             stderr = string `${stderr}${stderr.trim().length() > 0 ? "\n" : ""}command timed out after ${timeoutSeconds}s`;
                             logWarn(string `command timed out after ${timeoutSeconds}s: ${command}`);
                         }
 
                         do { check file:remove(stdoutFile); } on fail { }
                         do { check file:remove(stderrFile); } on fail { }
+                        do { check file:remove(tempDir); } on fail { }
                     } else {
                         stderr = exitResult.toString();
                         exitCode = 1;

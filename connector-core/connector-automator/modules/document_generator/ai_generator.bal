@@ -305,13 +305,34 @@ function writeKeywordsToToml(string connectorPath, string[] keywords) returns er
 
     string[] lines = regexp:split(re `\n`, content);
 
-    // Pass 1: replace an existing top-level keywords line if present.
+    // Pass 1: replace an existing keywords key inside [package] only.
     boolean replaced = false;
+    boolean inPackage = false;
+    boolean skipping = false;
     string[] afterReplace = [];
     foreach string line in lines {
-        if strings:trim(line).startsWith("keywords") {
+        string trimmed = strings:trim(line);
+        if trimmed.startsWith("[") && !trimmed.startsWith("[[") {
+            inPackage = trimmed == "[package]";
+        }
+        if skipping {
+            if strings:includes(trimmed, "]") {
+                skipping = false;
+            }
+            continue;
+        }
+        if inPackage && trimmed.startsWith("keywords") && strings:includes(trimmed, "=") {
             afterReplace.push(keywordsLine);
             replaced = true;
+            int? eqIdx = trimmed.indexOf("=");
+            if eqIdx is int {
+                string valueHalf = strings:trim(trimmed.substring(eqIdx + 1));
+                int? openBracket = valueHalf.indexOf("[");
+                int? closeBracket = valueHalf.lastIndexOf("]");
+                if openBracket is int && !(closeBracket is int && closeBracket > openBracket) {
+                    skipping = true;
+                }
+            }
         } else {
             afterReplace.push(line);
         }
@@ -324,16 +345,16 @@ function writeKeywordsToToml(string connectorPath, string[] keywords) returns er
         // Pass 2: insert once after the version line inside [package] only.
         // Platform dependency tables also contain version = lines; inserting after
         // each of those would produce duplicate keys and invalid TOML.
-        boolean inPackage = false;
+        boolean inPkg = false;
         boolean inserted = false;
         string[] newLines = [];
         foreach string line in lines {
             string trimmed = strings:trim(line);
             if trimmed.startsWith("[") {
-                inPackage = trimmed == "[package]";
+                inPkg = trimmed == "[package]";
             }
             newLines.push(line);
-            if inPackage && !inserted && trimmed.startsWith("version") {
+            if inPkg && !inserted && trimmed.startsWith("version") {
                 newLines.push(keywordsLine);
                 inserted = true;
             }

@@ -530,7 +530,8 @@ function extractFileHeader(string content) returns string {
     string[] lines = regex:split(content, "\n");
     int firstSection = lines.length();
     foreach int i in 0 ..< lines.length() {
-        if regex:matches(lines[i].trim(), "[0-9]+\\..*") {
+        string trimmedLine = lines[i].trim();
+        if regex:matches(trimmedLine, "[0-9]+\\..*") || trimmedLine.startsWith("## ") {
             firstSection = i;
             break;
         }
@@ -620,7 +621,8 @@ function removeTemplateTodoLines(string header) returns string {
     string[] lines = regex:split(header, "\n");
     string[] kept = [];
     foreach string line in lines {
-        if !line.trim().startsWith("[//]: #") {
+        string trimmedLine = line.trim();
+        if !(trimmedLine.startsWith("[//]: # (TODO:") || trimmedLine.startsWith("[//]: #(TODO:")) {
             kept.push(line);
         }
     }

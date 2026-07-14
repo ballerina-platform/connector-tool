@@ -221,19 +221,32 @@ function updateNestedDescription(map<json> current, string[] pathParts, int inde
             json|error arrayResult = current.get(arrayName);
             if arrayResult is json[] {
                 json[] array = arrayResult;
-                if indexResult < array.length() && array[indexResult] is map<json> {
-                    return updateNestedDescription(<map<json>>array[indexResult], pathParts, index + 1, description);
+                if indexResult < array.length() {
+                    json item = array[indexResult];
+                    if item is map<json> {
+                        return updateNestedDescription(<map<json>>item, pathParts, index + 1, description);
+                    } else {
+                        return error("Array item at index is not a JSON object: " + part);
+                    }
+                } else {
+                    return error("Array index out of bounds: " + part);
                 }
+            } else {
+                return error("Could not find array field: " + arrayName);
             }
+        } else {
+            return error("Invalid array index in part: " + part, indexResult);
         }
     } else {
         json|error nextResult = current.get(part);
         if nextResult is map<json> {
             return updateNestedDescription(<map<json>>nextResult, pathParts, index + 1, description);
+        } else if nextResult is error {
+            return error("Could not find field: " + part, nextResult);
+        } else {
+            return error("Field is not a JSON object: " + part);
         }
     }
-
-    return ();
 }
 
 # Updates the `operationId` of an operation in an OpenAPI paths map.

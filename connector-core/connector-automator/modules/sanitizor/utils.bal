@@ -22,9 +22,9 @@ import ballerina/yaml;
 
 // Helper function to generate unique request IDs
 function generateRequestId(string schemaName, string path, string requestType) returns string {
-    string cleanPath = regex:replaceAll(path, "\\.", "_");
-    cleanPath = regex:replaceAll(cleanPath, "\\[", "_");
-    cleanPath = regex:replaceAll(cleanPath, "\\]", "_");
+    string cleanPath = regex:replaceAll(path, "\\.", "_d");
+    cleanPath = regex:replaceAll(cleanPath, "\\[", "_l");
+    cleanPath = regex:replaceAll(cleanPath, "\\]", "_r");
     return string `${schemaName}_${requestType}_${cleanPath}`;
 }
 
@@ -114,25 +114,6 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
     json|yaml:Error jsonData = yaml:readString(yamlContent);
 
     if jsonData is yaml:Error {
-        // Ballerina's YAML parser rejects backtick (U+0060) in plain scalars (YAML 1.1
-        // reserved indicator). Replace with underscore (U+005F): single-quote/asterisk/
-        // double-quote all introduce new YAML token errors; space and underscore are safe.
-        // `name` → _name_ preserves the code-span intent without breaking the parser.
-        int[] sanitizedCodePoints = from int cp in yamlContent.toCodePointInts()
-            select (cp == 96 ? 95 : cp);
-        string|error sanitizedContent = string:fromCodePointInts(sanitizedCodePoints);
-        if sanitizedContent is string {
-            json|yaml:Error retryData = yaml:readString(sanitizedContent);
-            if retryData is json {
-                io:Error? retryWrite = io:fileWriteJson(jsonAlignedSpec, retryData);
-                if retryWrite is io:Error {
-                    return error("Failed to write JSON aligned spec file: " + retryWrite.message());
-                }
-                utils:logVerbose("✓ converted YAML to JSON (backtick replacement applied)");
-                return;
-            }
-        }
-
         utils:logVerbose(string `Ballerina YAML parser failed, trying yq fallback: ${jsonData.message()}`);
 
         string escapedPath = "'" + regex:replaceAll(yamlAlignedSpec, "'", "'\\\\''") + "'";
@@ -151,24 +132,18 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
             return;
         }
 
-        string stdinFile = yamlAlignedSpec + ".stdin_tmp";
-        io:Error? stdinWriteResult = io:fileWriteString(stdinFile, yamlContent);
-        if stdinWriteResult is () {
-            string escapedStdinFile = "'" + regex:replaceAll(stdinFile, "'", "'\\\\''") + "'";
-            utils:CommandResult pythonResult = utils:executeCommand(
-                string `python3 -c 'import sys,yaml,json; print(json.dumps(yaml.safe_load(sys.stdin), indent=2))' < ${escapedStdinFile}`,
-                "."
-            );
-            do { check file:remove(stdinFile); } on fail { }
+        utils:CommandResult pythonResult = utils:executeCommand(
+            string `python3 -c 'import sys,yaml,json; print(json.dumps(yaml.safe_load(sys.stdin), indent=2))' < ${escapedPath}`,
+            "."
+        );
 
-            if utils:isCommandSuccessfull(pythonResult) && pythonResult.stdout.length() > 0 {
-                io:Error? writeResult = io:fileWriteString(jsonAlignedSpec, pythonResult.stdout);
-                if writeResult is io:Error {
-                    return error("Failed to write JSON aligned spec file: " + writeResult.message());
-                }
-                utils:logVerbose("converted YAML to JSON via Python");
-                return;
+        if utils:isCommandSuccessfull(pythonResult) && pythonResult.stdout.length() > 0 {
+            io:Error? writeResult = io:fileWriteString(jsonAlignedSpec, pythonResult.stdout);
+            if writeResult is io:Error {
+                return error("Failed to write JSON aligned spec file: " + writeResult.message());
             }
+            utils:logVerbose("converted YAML to JSON via Python");
+            return;
         }
 
         return error("Failed to parse YAML content: " + jsonData.message() +

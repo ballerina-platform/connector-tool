@@ -14,6 +14,7 @@
 // under the License.
 
 import ballerina/io;
+import ballerina/regex;
 
 // Helper function to extract API context (info section)
 function extractApiContext(json spec) returns string {
@@ -107,7 +108,7 @@ function collectDescriptionRequests(map<json> schemaMap, string schemaName, stri
 
     // Check if schema itself needs description
     if isInvalidDescription(schemaMap) {
-        string requestId = generateRequestId(schemaName, displayPath, "schema");
+        string requestId = generateRequestId(schemaName, encodeSegments(effectiveSegments), "schema");
         string context = string `Schema '${schemaName}' definition: ${schemaMap.toString()}`;
         requests.push({
             id: requestId,
@@ -159,7 +160,7 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
 
             // Check if property needs description
             if isInvalidDescription(propertyMap) {
-                string requestId = generateRequestId(parentSchemaName, propertyPath, "property");
+                string requestId = generateRequestId(parentSchemaName, encodeSegments(propertySegments), "property");
                 string context = string `Property '${propertyName}' in schema '${parentSchemaName}'. Property definition: ${propertyMap.toString()}`;
                 // add schema type infor to context for better IA understanding
                 if propertyMap.hasKey("type") {
@@ -818,4 +819,19 @@ function getSchemaDescriptionFromSpec(string schemaName, json spec) returns stri
         }
     }
     return ();
+}
+
+// Encodes string segments injectively using __ as segment separator,
+// escaping _ to _u, . to _d, [ to _l, ] to _r, and / to _s.
+function encodeSegments(string[] segments) returns string {
+    string[] encoded = [];
+    foreach string segment in segments {
+        string s = regex:replaceAll(segment, "_", "_u");
+        s = regex:replaceAll(s, "\\.", "_d");
+        s = regex:replaceAll(s, "\\[", "_l");
+        s = regex:replaceAll(s, "\\]", "_r");
+        s = regex:replaceAll(s, "/", "_s");
+        encoded.push(s);
+    }
+    return string:'join("__", ...encoded);
 }

@@ -232,6 +232,8 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         error? docResult = document_generator:executeDocumentGeneration(outputDir, excluded);
         if docResult is error {
             utils:logWarn(string `documentation generation failed: ${docResult.message()}`);
+        } else {
+            utils:logInfo("✓ documentation generated");
         }
     } else {
         utils:logVerbose("skipping docs (excluded)");

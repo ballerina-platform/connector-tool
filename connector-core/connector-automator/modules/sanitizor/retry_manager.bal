@@ -54,11 +54,11 @@ public function isRetryableError(error err) returns boolean {
     // Fast-fail on permanent errors — retrying these only wastes backoff cycles.
     boolean isPermanentError = message.includes("401") ||
                             message.includes("403") ||
-                            message.includes("400") ||
+                            message.includes("status 400") ||
                             message.includes("unauthorized") ||
                             message.includes("forbidden") ||
                             message.includes("invalid api key") ||
-                            message.includes("authentication") ||
+                            message.includes("authentication failed") ||
                             message.includes("invalid_request") ||
                             message.includes("bad request");
     if isPermanentError {
