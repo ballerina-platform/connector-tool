@@ -128,8 +128,6 @@ public function getAIModel() returns ai:ModelProvider|error {
     return model;
 }
 
-
-
 # Extract a JSON object string from an LLM response that may be wrapped in markdown fences.
 #
 # + responseText - Full LLM response text
