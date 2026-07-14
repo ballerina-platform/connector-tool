@@ -16,6 +16,7 @@
 import ballerina/file;
 import ballerina/io;
 import ballerina/os;
+import ballerina/random;
 import ballerina/regex;
 import ballerina/time;
 
@@ -47,14 +48,19 @@ public function executeCommand(string command, string workingDir, int timeoutSec
         }
 
         if stderr == "" {
-            string tempDir = string `/tmp/bal_exec_${startTime[0]}_${regex:replaceAll(startTime[1].toString(), "\\.", "_")}`;
-            do { check file:createDir(tempDir, file:RECURSIVE); } on fail { }
+            int|random:Error randomResult = random:createIntInRange(0, 2147483647);
+            int randomSuffix = randomResult is int ? randomResult : 0;
+            string tempDir = string `/tmp/bal_exec_${startTime[0]}_${regex:replaceAll(startTime[1].toString(), "\\.", "_")}_${randomSuffix}`;
+            error? dirCreated = file:createDir(tempDir, file:RECURSIVE);
             string stdoutFile = string `${tempDir}/stdout.txt`;
             string stderrFile = string `${tempDir}/stderr.txt`;
 
             string[] commandParts = regex:split(command, " ");
             if commandParts.length() == 0 {
                 stderr = "Empty command";
+                exitCode = 1;
+            } else if dirCreated is error {
+                stderr = string `Failed to create temp directory: ${dirCreated.toString()}`;
                 exitCode = 1;
             } else {
                 // Portable watchdog: start the command in an isolated process group,
@@ -100,7 +106,7 @@ public function executeCommand(string command, string workingDir, int timeoutSec
 
                         do { check file:remove(stdoutFile); } on fail { }
                         do { check file:remove(stderrFile); } on fail { }
-                        do { check file:remove(tempDir); } on fail { }
+                        do { check file:remove(tempDir, file:RECURSIVE); } on fail { }
                     } else {
                         stderr = exitResult.toString();
                         exitCode = 1;

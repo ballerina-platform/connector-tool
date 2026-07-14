@@ -22,7 +22,8 @@ import ballerina/yaml;
 
 // Helper function to generate unique request IDs
 function generateRequestId(string schemaName, string path, string requestType) returns string {
-    string cleanPath = regex:replaceAll(path, "\\.", "_d");
+    string cleanPath = regex:replaceAll(path, "_", "_u");
+    cleanPath = regex:replaceAll(cleanPath, "\\.", "_d");
     cleanPath = regex:replaceAll(cleanPath, "\\[", "_l");
     cleanPath = regex:replaceAll(cleanPath, "\\]", "_r");
     return string `${schemaName}_${requestType}_${cleanPath}`;
@@ -77,7 +78,10 @@ function isNameTaken(string name, string[] existingNames, map<string> nameMappin
 
 // Helper function to generate unique request IDs for operationId requests
 function generateOperationRequestId(string path, string method) returns string {
-    string cleanPath = regex:replaceAll(path, "[^a-zA-Z0-9]", "_");
+    string cleanPath = regex:replaceAll(path, "_", "_u");
+    cleanPath = regex:replaceAll(cleanPath, "\\.", "_d");
+    cleanPath = regex:replaceAll(cleanPath, "\\[", "_l");
+    cleanPath = regex:replaceAll(cleanPath, "\\]", "_r");
     return string `${method}_${cleanPath}`;
 }
 

@@ -522,7 +522,7 @@ function collectParameterDescriptionRequests(json spec, DescriptionRequest[] req
                                                     string paramIn = paramMap.hasKey("in") ? <string>paramMap.get("in") : "query";
                                                     string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
 
-                                                    string requestId = generateRequestId("param", string `${path}_${method}_${paramName}`, "parameter");
+                                                    string requestId = generateRequestId("param", encodeSegments([path, method, paramName]), "parameter");
                                                     string context = string `${paramIn} parameter '${paramName}' for operation: ${operationId}. Parameter definition: ${paramMap.toString()}`;
 
                                                     // Add schema type info for better context
@@ -596,7 +596,7 @@ function collectOperationDescriptionRequests(json spec, DescriptionRequest[] req
                                 string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
                                 string summary = operation.hasKey("summary") ? <string>operation.get("summary") : "";
 
-                                string requestId = generateRequestId("operation", string `${path}_${method}`, "description");
+                                                                string requestId = generateRequestId("operation", encodeSegments([path, method]), "description");
                                 string context = string `Operation '${operationId}' (${method.toUpperAscii()} ${path})`;
                                 if summary.length() > 0 {
                                     context += string `. Summary: ${summary}`;
@@ -649,7 +649,7 @@ function collectOperationDescriptionRequests(json spec, DescriptionRequest[] req
                                                         string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
                                                         string summary = operation.hasKey("summary") ? <string>operation.get("summary") : "";
 
-                                                        string requestId = generateRequestId("response", string `${path}_${method}_${responseCode}`, "description");
+                                                        string requestId = generateRequestId("response", encodeSegments([path, method, responseCode]), "description");
                                                         string context = string `Response description for ${responseCode} status in operation '${operationId}' (${method.toUpperAscii()} ${path}).`;
                                                         if summary.length() > 0 {
                                                             context += string ` Operation summary: ${summary}.`;
@@ -724,7 +724,7 @@ function collectOperationSummaryRequests(json spec, DescriptionRequest[] request
                             if needsSummary {
                                 string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
 
-                                string requestId = generateRequestId("operation", string `${path}_${method}`, "summary");
+                                string requestId = generateRequestId("operation", encodeSegments([path, method]), "summary");
                                 string context = string `Operation '${operationId}' (${method.toUpperAscii()} ${path})`;
 
                                 if tooLong {
