@@ -13,6 +13,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/ai;
+
 string backtick = "`";
 string tripleBacktick = "```";
 
@@ -650,5 +652,75 @@ ${getConnectorSummary(metadata)}
 Available Example Directories: ${metadata.examples.toString()}
 
 Generate the complete examples/README.md now.
+`;
+}
+
+function createKeywordGenerationPrompt(ConnectorMetadata metadata) returns ai:Prompt {
+    string existingHint = metadata.existingKeywords.length() > 0
+        ? string `The connector currently has these keywords: ${metadata.existingKeywords.toString()}. Preserve any conformant Cost/*, Vendor/*, and Area/* values if they are correct.`
+        : "The connector has no existing keywords.";
+
+    string descriptionHint = metadata.description is string
+        ? string `Description from Ballerina.toml: ${<string>metadata.description}`
+        : "No description available.";
+
+    return `You are a metadata specialist for Ballerina connectors published to Ballerina Central.
+
+Your task is to assign the correct marketplace keyword values for a connector's ${backtick}Ballerina.toml${backtick}.
+You must fill in three fields: cost, vendor, and area.
+
+---
+
+## STRICT RULES — follow exactly, no exceptions
+
+### cost — pick EXACTLY ONE:
+- "Cost/Free" — completely free, no meaningful usage limits
+- "Cost/Freemium" — free tier exists; paid plans unlock more features or capacity
+- "Cost/Paid" — no meaningful free tier; paid subscription required
+
+### vendor — pick EXACTLY ONE:
+Use the vendor's proper public brand name prefixed with "Vendor/". For multi-product suites use the parent brand (e.g. "Vendor/Google" not "Vendor/Gmail", "Vendor/Microsoft" not "Vendor/Azure").
+
+### area — pick EXACTLY ONE based on the platform's PRIMARY PURPOSE, not incidental API operations:
+
+| Value | When to use | Key signals |
+|---|---|---|
+| "Area/CRM & Sales" | CRM platforms, sales pipelines, lead/deal/contact/account management | .crm., contacts, deals, leads, pipelines, quotes, owners, engagements |
+| "Area/Marketing & Social Media" | Marketing automation, email campaign delivery, social platforms, ad networks | .marketing., campaigns, bulk email, social, ads, forms, subscriptions |
+| "Area/Communication" | Team chat, personal email clients, SMS/voice calls, video conferencing, push notifications | slack, gmail, teams, twilio, discord, zoom, outlook.mail, sns |
+| "Area/Productivity & Collaboration" | Project/task management, calendars, document signing, spreadsheets, note-taking | jira, asana, trello, calendar, docusign, excel, smartsheet, notion |
+| "Area/Finance & Accounting" | Payment processing, billing, invoicing, subscriptions, accounting ledgers | stripe, paypal, xero, quickbooks, zuora, invoices, payments |
+| "Area/E-Commerce" | Online storefronts, product catalogs, cart/order management | shopify, woocommerce, standalone commerce storefronts |
+| "Area/ERP & Business Operations" | Enterprise resource planning, supply chain, manufacturing, insurance core systems | sap, netsuite, guidewire, dynamics365.scm |
+| "Area/HRMS" | HR management, payroll, workforce planning, employee records | dayforce, peoplehr, workday, successfactors, dynamics365.hr |
+| "Area/Developer Tools" | Source control, CI/CD, API management portals, issue tracking, developer portals | github, gitlab, bitbucket, wso2.apim |
+| "Area/Database" | SQL, NoSQL, time-series, in-memory, data warehouse, ORM adapters | postgresql, mysql, mssql, mongodb, redis, dynamodb, snowflake |
+| "Area/Messaging" | Message brokers, event streaming, pub/sub queues | kafka, rabbitmq, nats, sqs, servicebus, pubsub, ibmmq, confluent |
+| "Area/Storage & File Management" | Object storage, cloud drives, file sync, document repositories | s3, drive, dropbox, onedrive, sharepoint, .files |
+| "Area/AI & Machine Learning" | LLMs, generative AI, embeddings, vector databases, ML inference platforms | openai, anthropic, mistral, azure.ai, milvus, weaviate, pinecone |
+| "Area/Cloud & Infrastructure" | Cloud marketplace, managed infrastructure, observability, monitoring | elastic.elasticcloud, aws.marketplace, jaeger, prometheus, newrelic |
+| "Area/Security & Identity" | Identity management, user provisioning, SSO, secrets management | scim, okta, auth0, secretmanager, azure.ad |
+| "Area/Other" | Utility connectors that truly don't fit any category above | aws.lambda, azure.functions |
+
+### Common classification pitfalls — read carefully:
+- HubSpot commerce/engagements/extensions sub-modules → "Area/CRM & Sales" (they live inside HubSpot CRM, not standalone storefronts or email clients)
+- HubSpot .files module → "Area/Storage & File Management" (file storage API, not CRM data)
+- AWS SES → "Area/Marketing & Social Media" (bulk transactional/marketing delivery, not a personal email client)
+- Gmail → "Area/Communication" (personal inbox API, not bulk marketing)
+- Azure Event Hub → "Area/Messaging" (event streaming broker, not storage)
+- SharePoint (lists/pages/sites/files) → "Area/Storage & File Management" (document repository, not productivity tool)
+
+NEVER use these shorthand forms — they are invalid: "Area/AI", "Area/CRM", "Area/Finance", "Area/Productivity"
+
+---
+
+## CONNECTOR INFORMATION
+
+Connector name: ${metadata.connectorName}
+${descriptionHint}
+${existingHint}
+
+client.bal content (first 3000 chars):
+${metadata.clientBalContent.length() > 3000 ? metadata.clientBalContent.substring(0, 3000) : metadata.clientBalContent}
 `;
 }

@@ -15,34 +15,30 @@
 
 import wso2/connector_automator.utils;
 
-import ballerina/regex;
+import ballerina/lang.regexp;
 
-// Helper function to update description in spec using location path
-function updateDescriptionInSpec(map<json> schemas, string location, string description) returns error? {
-    string[] pathParts = regex:split(location, "\\.");
-
-    if pathParts.length() == 1 {
-        // Schema-level description
-        string schemaName = pathParts[0];
-        json|error schemaResult = schemas.get(schemaName);
-        if schemaResult is map<json> {
-            map<json> schemaMap = <map<json>>schemaResult;
-            schemaMap["description"] = description;
-            // No need to reassign since we're modifying the original reference
-        }
-    } else {
-        // Property-level description - navigate to the correct location
-        string schemaName = pathParts[0];
-        json|error schemaResult = schemas.get(schemaName);
-        if schemaResult is map<json> {
-            error? result = updateNestedDescription(<map<json>>schemaResult, pathParts, 1, description);
-            if result is error {
-                return result;
-            }
-        }
+// Helper function to update description in spec using a segment-array location.
+// Segments (e.g. ["User", "properties", "user.name"]) are pre-split so property
+// names containing dots navigate correctly.
+function updateDescriptionInSpec(map<json> schemas, string[] pathParts, string description) returns error? {
+    if pathParts.length() == 0 {
+        return error("Empty description location");
     }
 
-    return ();
+    string schemaName = pathParts[0];
+    json|error schemaResult = schemas.get(schemaName);
+    if !(schemaResult is map<json>) {
+        return error("Could not find schema at location: " + schemaName);
+    }
+
+    map<json> schemaMap = <map<json>>schemaResult;
+    if pathParts.length() == 1 {
+        // Schema-level description — modifying the map reference in place
+        schemaMap["description"] = description;
+        return ();
+    }
+
+    return updateNestedDescription(schemaMap, pathParts, 1, description);
 }
 
 // Searches a parameter array for a matching entry and updates its description.
@@ -216,28 +212,41 @@ function updateNestedDescription(map<json> current, string[] pathParts, int inde
 
     if part.includes("[") {
         // Handle array indices like "allOf[0]"
-        string[] indexParts = regex:split(part, "\\[");
+        string[] indexParts = regexp:split(re `\[`, part);
         string arrayName = indexParts[0];
-        string indexStr = regex:replaceAll(indexParts[1], "\\]", "");
+        string indexStr = regexp:replaceAll(re `\]`, indexParts[1], "");
         int|error indexResult = int:fromString(indexStr);
 
         if indexResult is int {
             json|error arrayResult = current.get(arrayName);
             if arrayResult is json[] {
                 json[] array = arrayResult;
-                if indexResult < array.length() && array[indexResult] is map<json> {
-                    return updateNestedDescription(<map<json>>array[indexResult], pathParts, index + 1, description);
+                if indexResult < array.length() {
+                    json item = array[indexResult];
+                    if item is map<json> {
+                        return updateNestedDescription(<map<json>>item, pathParts, index + 1, description);
+                    } else {
+                        return error("Array item at index is not a JSON object: " + part);
+                    }
+                } else {
+                    return error("Array index out of bounds: " + part);
                 }
+            } else {
+                return error("Could not find array field: " + arrayName);
             }
+        } else {
+            return error("Invalid array index in part: " + part, indexResult);
         }
     } else {
         json|error nextResult = current.get(part);
         if nextResult is map<json> {
             return updateNestedDescription(<map<json>>nextResult, pathParts, index + 1, description);
+        } else if nextResult is error {
+            return error("Could not find field: " + part, nextResult);
+        } else {
+            return error("Field is not a JSON object: " + part);
         }
     }
-
-    return ();
 }
 
 # Updates the `operationId` of an operation in an OpenAPI paths map.
@@ -312,7 +321,7 @@ function updateResponseDescriptionInSpec(map<json> paths, string location, strin
         string locationWithoutPrefix = location.substring(6); // Remove "paths."
 
         // Split by dots, but be careful with path segments that might contain dots
-        string[] locationParts = regex:split(locationWithoutPrefix, "\\.");
+        string[] locationParts = regexp:split(re `\.`, locationWithoutPrefix);
 
         if locationParts.length() >= 5 { // minimum: path, method, "responses", responseCode, "description"
             // Last three parts are always "responses", responseCode, "description"

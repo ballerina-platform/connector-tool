@@ -13,7 +13,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 # Extract numeric value from LLM response text
 #
@@ -21,7 +21,7 @@ import ballerina/regex;
 # + return - Extracted number or error
 public function extractNumberFromResponse(string responseText) returns int|error {
     // Try to find first number in the response
-    string[] parts = regex:split(responseText, "[^0-9]");
+    string[] parts = regexp:split(re `[^0-9]`, responseText);
 
     foreach string part in parts {
         if part.length() > 0 {

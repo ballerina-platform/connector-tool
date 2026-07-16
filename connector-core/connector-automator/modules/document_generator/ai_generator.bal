@@ -13,15 +13,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/ai;
 import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
-
+import ballerina/lang.'string as strings;
 import wso2/connector_automator.utils;
-
-public function initDocumentationGenerator() returns error? {
-    return utils:initAIService();
-}
 
 public function generateAllDocumentation(string connectorPath) returns error? {
     check generateBallerinaReadme(connectorPath);
@@ -29,6 +26,7 @@ public function generateAllDocumentation(string connectorPath) returns error? {
     check generateExamplesReadme(connectorPath);
     check generateIndividualExampleReadmes(connectorPath);
     check generateMainReadme(connectorPath);
+    check generateKeywords(connectorPath);
 }
 
 public function generateBallerinaReadme(string connectorPath) returns error? {
@@ -38,7 +36,7 @@ public function generateBallerinaReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("ballerina_readme_template.md", data);
+    string content = substituteVariables(ballerinaReadmeTemplate(), data);
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string outputPath = ballerinaDir + "/README.md";
@@ -58,7 +56,7 @@ public function generateTestsReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("tests_readme_template.md", data);
+    string content = substituteVariables(testsReadmeTemplate(), data);
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string outputPath = ballerinaDir + "/tests/README.md";
@@ -109,15 +107,6 @@ public function generateIndividualExampleReadmes(string connectorPath) returns e
     }
 }
 
-function extractDirectoryName(string fullPath) returns string {
-    // Get the last segment of the path
-    string[] pathParts = regexp:split(re `/`, fullPath);
-    if pathParts.length() > 0 {
-        return pathParts[pathParts.length() - 1];
-    }
-    return fullPath;
-}
-
 function generateSingleExampleReadme(string examplePath, string exampleDirName, ConnectorMetadata metadata) returns error? {
     // Read all .bal files in the example directory
     ExampleData exampleData = check analyzeExampleDirectory(examplePath, exampleDirName);
@@ -132,7 +121,7 @@ function generateSingleExampleReadme(string examplePath, string exampleDirName, 
     // Add example-specific data
     data.CONNECTOR_NAME = metadata.connectorName;
 
-    string content = check processTemplate("example_specific_template.md", data);
+    string content = substituteVariables(exampleSpecificTemplate(), data);
 
     string readmeFileName = "README.md";
     string outputPath = examplePath + "/" + readmeFileName;
@@ -143,7 +132,7 @@ function generateSingleExampleReadme(string examplePath, string exampleDirName, 
 function generateIndividualExampleContent(ExampleData exampleData, ConnectorMetadata connectorMetadata) returns map<string>|error {
     map<string> content = {};
     string prompt = createIndividualExamplePrompt(exampleData, connectorMetadata);
-    string result = check callAI(prompt);
+    string result = check utils:callAI(prompt);
 
     content["individual_readme"] = result;
     return content;
@@ -156,7 +145,7 @@ public function generateExamplesReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("examples_readme_template.md", data);
+    string content = substituteVariables(examplesReadmeTemplate(), data);
 
     string outputPath = connectorPath + "/examples/README.md";
 
@@ -175,7 +164,7 @@ public function generateMainReadme(string connectorPath) returns error? {
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
 
-    string content = check processTemplate("main_readme_template.md", data);
+    string content = substituteVariables(mainReadmeTemplate(), data);
 
     string outputPath = connectorPath + "/README.md";
 
@@ -191,19 +180,19 @@ function generateBallerinaContent(ConnectorMetadata metadata) returns map<string
     map<string> content = {};
 
     string overviewPrompt = createBallerinaOverviewPrompt(metadata);
-    string overviewResult = check callAI(overviewPrompt);
+    string overviewResult = check utils:callAI(overviewPrompt);
     content["overview"] = overviewResult;
 
     string setupPrompt = createBallerinaSetupPrompt(metadata);
-    string setupResult = check callAI(setupPrompt);
+    string setupResult = check utils:callAI(setupPrompt);
     content["setup"] = setupResult;
 
     string quickstartPrompt = createBallerinaQuickstartPrompt(metadata);
-    string quickstartResult = check callAI(quickstartPrompt);
+    string quickstartResult = check utils:callAI(quickstartPrompt);
     content["quickstart"] = quickstartResult;
 
     string examplesPrompt = createBallerinaExamplesPrompt(metadata);
-    string examplesResult = check callAI(examplesPrompt);
+    string examplesResult = check utils:callAI(examplesPrompt);
     content["examples"] = examplesResult;
 
     return content;
@@ -212,7 +201,7 @@ function generateBallerinaContent(ConnectorMetadata metadata) returns map<string
 function generateTestsContent(ConnectorMetadata metadata) returns map<string>|error {
     map<string> content = {};
     string testsPrompt = createTestReadmePrompt(metadata);
-    string testsResult = check callAI(testsPrompt);
+    string testsResult = check utils:callAI(testsPrompt);
     content["testing_approach"] = testsResult;
 
     return content;
@@ -221,7 +210,7 @@ function generateTestsContent(ConnectorMetadata metadata) returns map<string>|er
 function generateExamplesContent(ConnectorMetadata metadata) returns map<string>|error {
     map<string> content = {};
     string mainExamplesPrompt = createMainExampleReadmePrompt(metadata);
-    string mainExamplesResult = check callAI(mainExamplesPrompt);
+    string mainExamplesResult = check utils:callAI(mainExamplesPrompt);
     content["main_examples_readme"] = mainExamplesResult;
 
     return content;
@@ -234,172 +223,47 @@ function generateMainContent(ConnectorMetadata metadata) returns map<string>|err
     content["useful_links"] = createUsefulLinksSection(metadata);
 
     string overviewPrompt = createBallerinaOverviewPrompt(metadata);
-    string overviewResult = check callAI(overviewPrompt);
+    string overviewResult = check utils:callAI(overviewPrompt);
     content["overview"] = overviewResult;
 
     string setupPrompt = createBallerinaSetupPrompt(metadata);
-    string setupResult = check callAI(setupPrompt);
+    string setupResult = check utils:callAI(setupPrompt);
     content["setup"] = setupResult;
 
     string quickstartPrompt = createBallerinaQuickstartPrompt(metadata);
-    string quickstartResult = check callAI(quickstartPrompt);
+    string quickstartResult = check utils:callAI(quickstartPrompt);
     content["quickstart"] = quickstartResult;
 
     string examplesPrompt = createBallerinaExamplesPrompt(metadata);
-    string examplesResult = check callAI(examplesPrompt);
+    string examplesResult = check utils:callAI(examplesPrompt);
     content["examples"] = examplesResult;
 
     return content;
 }
 
-function callAI(string prompt) returns string|error {
-    return utils:callAI(prompt);
-}
-
-function ensureDirectoryExists(string dirPath) returns error? {
-    if !check file:test(dirPath, file:EXISTS) {
-        check file:createDir(dirPath, file:RECURSIVE);
-    }
-}
-
-// Template processing functions
-function processTemplate(string templateName, TemplateData data) returns string|error {
-    string? template = DOCUMENT_TEMPLATES[templateName];
-    if template is () {
-        return error("Template not found: " + templateName);
-    }
-    return substituteVariables(template, data);
-}
-
+// Template processing functions.
+// Every placeholder is always replaced — even when its value is empty — so that
+// no literal {{PLACEHOLDER}} token can leak into a published README.
 function substituteVariables(string template, TemplateData data) returns string {
     string result = template;
 
-    // Simple string replacement function
-    string connectorName = data.CONNECTOR_NAME ?: "";
-    if connectorName != "" {
-        result = simpleReplace(result, "{{CONNECTOR_NAME}}", connectorName);
-    }
-
-    string version = data.VERSION ?: "";
-    if version != "" {
-        result = simpleReplace(result, "{{VERSION}}", version);
-    }
-
-    string description = data.DESCRIPTION ?: "";
-    if description != "" {
-        result = simpleReplace(result, "{{DESCRIPTION}}", description);
-    }
-
-    string overview = data.AI_GENERATED_OVERVIEW ?: "";
-    if overview != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_OVERVIEW}}", overview);
-    }
-
-    string setup = data.AI_GENERATED_SETUP ?: "";
-    if setup != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_SETUP}}", setup);
-    }
-
-    string quickstart = data.AI_GENERATED_QUICKSTART ?: "";
-    if quickstart != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_QUICKSTART}}", quickstart);
-    }
-
-    string examples = data.AI_GENERATED_EXAMPLES ?: "";
-    if examples != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_EXAMPLES}}", examples);
-    }
-
-    string usage = data.AI_GENERATED_USAGE ?: "";
-    if usage != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_USAGE}}", usage);
-    }
-
-    string testingApproach = data.AI_GENERATED_TESTING_APPROACH ?: "";
-    if testingApproach != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_TESTING_APPROACH}}", testingApproach);
-    }
-
-    string exampleDescriptions = data.AI_GENERATED_EXAMPLE_DESCRIPTIONS ?: "";
-    if exampleDescriptions != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_EXAMPLE_DESCRIPTIONS}}", exampleDescriptions);
-    }
-
-    string gettingStarted = data.AI_GENERATED_GETTING_STARTED ?: "";
-    if gettingStarted != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_GETTING_STARTED}}", gettingStarted);
-    }
-
-    string headerAndBadges = data.AI_GENERATED_HEADER_AND_BADGES ?: "";
-    if headerAndBadges != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_HEADER_AND_BADGES}}", headerAndBadges);
-    }
-
-    string usefulLinks = data.AI_GENERATED_USEFUL_LINKS ?: "";
-    if usefulLinks != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_USEFUL_LINKS}}", usefulLinks);
-    }
-
-    string individualReadme = data.AI_GENERATED_INDIVIDUAL_README ?: "";
-    if individualReadme != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_INDIVIDUAL_README}}", individualReadme);
-    }
-
-    string mainExamplesReadme = data.AI_GENERATED_MAIN_EXAMPLES_README ?: "";
-    if mainExamplesReadme != "" {
-        result = simpleReplace(result, "{{AI_GENERATED_MAIN_EXAMPLES_README}}", mainExamplesReadme);
-    }
+    result = simpleReplace(result, "{{CONNECTOR_NAME}}", data.CONNECTOR_NAME ?: "");
+    result = simpleReplace(result, "{{VERSION}}", data.VERSION ?: "");
+    result = simpleReplace(result, "{{DESCRIPTION}}", data.DESCRIPTION ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_OVERVIEW}}", data.AI_GENERATED_OVERVIEW ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_SETUP}}", data.AI_GENERATED_SETUP ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_QUICKSTART}}", data.AI_GENERATED_QUICKSTART ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_EXAMPLES}}", data.AI_GENERATED_EXAMPLES ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_USAGE}}", data.AI_GENERATED_USAGE ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_TESTING_APPROACH}}", data.AI_GENERATED_TESTING_APPROACH ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_EXAMPLE_DESCRIPTIONS}}", data.AI_GENERATED_EXAMPLE_DESCRIPTIONS ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_GETTING_STARTED}}", data.AI_GENERATED_GETTING_STARTED ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_HEADER_AND_BADGES}}", data.AI_GENERATED_HEADER_AND_BADGES ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_USEFUL_LINKS}}", data.AI_GENERATED_USEFUL_LINKS ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_INDIVIDUAL_README}}", data.AI_GENERATED_INDIVIDUAL_README ?: "");
+    result = simpleReplace(result, "{{AI_GENERATED_MAIN_EXAMPLES_README}}", data.AI_GENERATED_MAIN_EXAMPLES_README ?: "");
 
     return result;
-}
-
-function simpleReplace(string text, string searchFor, string replaceWith) returns string {
-    string result = text;
-    int? index = result.indexOf(searchFor);
-    while index is int {
-        string before = result.substring(0, index);
-        string after = result.substring(index + searchFor.length());
-        result = before + replaceWith + after;
-        index = result.indexOf(searchFor);
-    }
-    return result;
-}
-
-function writeOutput(string content, string outputPath) returns error? {
-    string normalized = normalizeGeneratedMarkdown(content);
-    check io:fileWriteString(outputPath, normalized);
-}
-
-function normalizeGeneratedMarkdown(string content) returns string {
-    string[] lines = regexp:split(re `\n`, content);
-    string[] cleaned = [];
-    string previousHeading = "";
-
-    foreach string line in lines {
-        string trimmed = line.trim();
-        boolean isHeading = trimmed.startsWith("#");
-
-        if isHeading {
-            if previousHeading == trimmed {
-                continue;
-            }
-            previousHeading = trimmed;
-        } else if trimmed.length() > 0 {
-            previousHeading = "";
-        }
-
-        cleaned.push(line);
-    }
-
-    string output = string:'join("\n", ...cleaned);
-
-    string previous = "";
-    while previous != output {
-        previous = output;
-        output = simpleReplace(output, "\n\n\n", "\n\n");
-    }
-
-    return output.trim() + "\n";
 }
 
 function createTemplateData(ConnectorMetadata metadata) returns TemplateData {
@@ -407,6 +271,98 @@ function createTemplateData(ConnectorMetadata metadata) returns TemplateData {
         CONNECTOR_NAME: metadata.connectorName,
         VERSION: metadata.version
     };
+}
+
+public function generateKeywords(string connectorPath) returns error? {
+
+    ConnectorMetadata metadata = check analyzeConnector(connectorPath);
+    ai:Prompt prompt = createKeywordGenerationPrompt(metadata);
+
+    ai:ModelProvider model = check utils:getAIModel();
+    ConnectorKeywords kw = check model->generate(prompt);
+
+    string[] keywords = [kw.cost, kw.vendor, kw.area, "Type/Connector"];
+    check writeKeywordsToToml(connectorPath, keywords);
+
+    utils:logInfo(string `✓ keywords written: ${keywords.toString()}`);
+}
+
+function writeKeywordsToToml(string connectorPath, string[] keywords) returns error? {
+    string tomlPath = connectorPath + "/Ballerina.toml";
+    if !check file:test(tomlPath, file:EXISTS) {
+        tomlPath = connectorPath + "/ballerina/Ballerina.toml";
+    }
+    if !check file:test(tomlPath, file:EXISTS) {
+        utils:logWarn("writeKeywordsToToml: Ballerina.toml not found — skipping");
+        return;
+    }
+
+    string content = check io:fileReadString(tomlPath);
+
+    // Serialise the keywords array to TOML format
+    string[] quoted = from string kw in keywords select string `"${kw}"`;
+    string keywordsLine = string `keywords = [${strings:'join(", ", ...quoted)}]`;
+
+    string[] lines = regexp:split(re `\n`, content);
+
+    // Pass 1: replace an existing keywords key inside [package] only.
+    boolean replaced = false;
+    boolean inPackage = false;
+    boolean skipping = false;
+    string[] afterReplace = [];
+    foreach string line in lines {
+        string trimmed = strings:trim(line);
+        if trimmed.startsWith("[") && !trimmed.startsWith("[[") {
+            inPackage = trimmed == "[package]";
+        }
+        if skipping {
+            if strings:includes(trimmed, "]") {
+                skipping = false;
+            }
+            continue;
+        }
+        if inPackage && trimmed.startsWith("keywords") && strings:includes(trimmed, "=") {
+            afterReplace.push(keywordsLine);
+            replaced = true;
+            int? eqIdx = trimmed.indexOf("=");
+            if eqIdx is int {
+                string valueHalf = strings:trim(trimmed.substring(eqIdx + 1));
+                int? openBracket = valueHalf.indexOf("[");
+                int? closeBracket = valueHalf.lastIndexOf("]");
+                if openBracket is int && !(closeBracket is int && closeBracket > openBracket) {
+                    skipping = true;
+                }
+            }
+        } else {
+            afterReplace.push(line);
+        }
+    }
+
+    string updated;
+    if replaced {
+        updated = strings:'join("\n", ...afterReplace);
+    } else {
+        // Pass 2: insert once after the version line inside [package] only.
+        // Platform dependency tables also contain version = lines; inserting after
+        // each of those would produce duplicate keys and invalid TOML.
+        boolean inPkg = false;
+        boolean inserted = false;
+        string[] newLines = [];
+        foreach string line in lines {
+            string trimmed = strings:trim(line);
+            if trimmed.startsWith("[") {
+                inPkg = trimmed == "[package]";
+            }
+            newLines.push(line);
+            if inPkg && !inserted && trimmed.startsWith("version") {
+                newLines.push(keywordsLine);
+                inserted = true;
+            }
+        }
+        updated = strings:'join("\n", ...newLines);
+    }
+
+    check io:fileWriteString(tomlPath, updated);
 }
 
 function mergeAIContent(TemplateData baseData, map<string> aiContent) returns TemplateData {

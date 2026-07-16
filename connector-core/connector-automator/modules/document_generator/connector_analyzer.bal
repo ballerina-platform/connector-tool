@@ -33,7 +33,10 @@ public function analyzeConnector(string connectorPath) returns ConnectorMetadata
         version: "1.0.0",
         examples: [],
         clientBalContent: "",
-        typesBalContent: ""
+        typesBalContent: "",
+        existingKeywords: [],
+        description: (),
+        icon: ()
     };
 
     // Analyze Ballerina.toml
@@ -101,6 +104,34 @@ function analyzeBallerinaToml(string connectorPath, ConnectorMetadata metadata) 
                     metadata.version = strings:trim(regexp:replaceAll(re `"`, parts[1], ""));
                 }
             }
+            if strings:startsWith(trimmedLine, "description") {
+                string[] parts = regexp:split(re `=`, trimmedLine);
+                if parts.length() > 1 {
+                    metadata.description = strings:trim(regexp:replaceAll(re `"`, parts[1], ""));
+                }
+            }
+            if strings:startsWith(trimmedLine, "icon") {
+                string[] parts = regexp:split(re `=`, trimmedLine);
+                if parts.length() > 1 {
+                    metadata.icon = strings:trim(regexp:replaceAll(re `"`, parts[1], ""));
+                }
+            }
+            if strings:startsWith(trimmedLine, "keywords") {
+                int? bracketOpen = trimmedLine.indexOf("[");
+                int? bracketClose = trimmedLine.lastIndexOf("]");
+                if bracketOpen is int && bracketClose is int && bracketClose > bracketOpen {
+                    string arrayContent = trimmedLine.substring(bracketOpen + 1, bracketClose);
+                    string[] tokens = regexp:split(re `,`, arrayContent);
+                    string[] keywords = [];
+                    foreach string token in tokens {
+                        string kw = strings:trim(regexp:replaceAll(re `"`, token, ""));
+                        if kw.length() > 0 {
+                            keywords.push(kw);
+                        }
+                    }
+                    metadata.existingKeywords = keywords;
+                }
+            }
 
         }
     }
@@ -123,14 +154,6 @@ function analyzeExamples(string connectorPath, ConnectorMetadata metadata) retur
             }
         }
     }
-}
-
-function trimLeadingPathSeparators(string path) returns string {
-    string normalized = path;
-    while normalized.startsWith("/") || normalized.startsWith("\\") {
-        normalized = normalized.substring(1);
-    }
-    return normalized;
 }
 
 public function getConnectorSummary(ConnectorMetadata metadata) returns string {
@@ -176,22 +199,3 @@ public function analyzeExampleDirectory(string examplePath, string exampleDirNam
     return exampleData;
 }
 
-public function formatExampleName(string dirName) returns string {
-    string[] parts = regexp:split(re `[-_]`, dirName);
-    string[] capitalizedParts = [];
-
-    foreach int i in 0 ..< parts.length() {
-        string part = parts[i];
-        if part.length() > 0 {
-            if i == 0 {
-                // Capitalize first word completely
-                capitalizedParts.push(part.substring(0, 1).toUpperAscii() + part.substring(1).toLowerAscii());
-            } else {
-                // Keep other words lowercase
-                capitalizedParts.push(part.toLowerAscii());
-            }
-        }
-    }
-
-    return strings:'join(" ", ...capitalizedParts);
-}

@@ -14,7 +14,7 @@
 // under the License.
 
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerina/time;
 
 import wso2/connector_automator.api_specification_generator as api;
@@ -467,7 +467,7 @@ function validateClientInteropDeclarations(string clientBal) returns error? {
 }
 
 function normalizeClientInteropDeclarations(string clientBal) returns string {
-    string[] lines = regex:split(clientBal, "\n");
+    string[] lines = regexp:split(re `\n`, clientBal);
     string[] normalizedLines = [];
     string[] moduleLevelExterns = [];
 
@@ -579,7 +579,7 @@ function applyClientDocsFromApiSpec(string clientBal, string apiSpecText) return
         return clientBal;
     }
 
-    string[] lines = regex:split(clientBal, "\n");
+    string[] lines = regexp:split(re `\n`, clientBal);
     string[] output = [];
     boolean inClientClass = false;
     int classDepth = 0;
@@ -654,7 +654,7 @@ function extractClientDocsFromApiSpec(string apiSpecText) returns ClientDocMap {
         methodDocs: {}
     };
 
-    string[] lines = regex:split(apiSpecText, "\n");
+    string[] lines = regexp:split(re `\n`, apiSpecText);
     int classLineIndex = -1;
     foreach int idx in 0 ..< lines.length() {
         if lines[idx].trim() == "public isolated client class Client {" {
@@ -954,7 +954,7 @@ function replaceAllLiteral(string inputText, string needle, string replacement) 
 function validateNativeTypeImports(string nativeAdaptorJava) returns error? {
     boolean hasRuntimeTypeImport = nativeAdaptorJava.includes("import io.ballerina.runtime.api.types.Type;");
     boolean hasModelTypeImport = false;
-    string[] lines = regex:split(nativeAdaptorJava, "\n");
+    string[] lines = regexp:split(re `\n`, nativeAdaptorJava);
     foreach string line in lines {
         string trimmed = line.trim();
         if trimmed.startsWith("import ") && trimmed.endsWith(".model.Type;") {

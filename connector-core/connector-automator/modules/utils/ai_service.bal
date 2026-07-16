@@ -15,13 +15,16 @@
 
 import ballerina/ai;
 import ballerina/os;
-import ballerina/regex;
+import ballerina/lang.regexp;
 import ballerinax/ai.anthropic;
 
 string cachedApiKey = "";
 ai:ModelProvider? defaultModel = ();
 
 public function initAIService() returns error? {
+    if defaultModel !is () {
+        return;
+    }
     string apiKey = os:getEnv("ANTHROPIC_API_KEY");
     if apiKey.length() == 0 {
         return error("ANTHROPIC_API_KEY environment variable is not set");
@@ -117,13 +120,21 @@ public function validateApiKey() returns error? {
     }
 }
 
+public function getAIModel() returns ai:ModelProvider|error {
+    ai:ModelProvider? model = defaultModel;
+    if model is () {
+        return error("AI model not initialized. Please call initAIService() first.");
+    }
+    return model;
+}
+
 # Extract a JSON object string from an LLM response that may be wrapped in markdown fences.
 #
 # + responseText - Full LLM response text
 # + return - Extracted JSON object string or error
 public function extractJsonFromLLMResponse(string responseText) returns string|error {
     if responseText.includes("```json") {
-        string[] parts = regex:split(responseText, "```json");
+        string[] parts = regexp:split(re `\u{60}\u{60}\u{60}json`, responseText);
         if parts.length() >= 2 {
             string block = parts[1];
             int? closingIdx = block.indexOf("```");
@@ -135,7 +146,7 @@ public function extractJsonFromLLMResponse(string responseText) returns string|e
     }
 
     if responseText.includes("```") {
-        string[] parts = regex:split(responseText, "```");
+        string[] parts = regexp:split(re `\u{60}\u{60}\u{60}`, responseText);
         if parts.length() >= 3 {
             string block = parts[1].trim();
             int? newline = block.indexOf("\n");

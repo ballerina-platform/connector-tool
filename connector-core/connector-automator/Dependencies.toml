@@ -352,17 +352,8 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "time"}
 ]
-
-[[package]]
-org = "ballerina"
-name = "regex"
-version = "1.3.2"
-dependencies = [
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "lang.string"}
-]
 modules = [
-	{org = "ballerina", packageName = "regex", moduleName = "regex"}
+	{org = "ballerina", packageName = "random", moduleName = "random"}
 ]
 
 [[package]]
@@ -471,7 +462,7 @@ dependencies = [
 	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "log"},
 	{org = "ballerina", name = "os"},
-	{org = "ballerina", name = "regex"},
+	{org = "ballerina", name = "random"},
 	{org = "ballerina", name = "time"},
 	{org = "ballerina", name = "yaml"},
 	{org = "ballerinai", name = "observe"},

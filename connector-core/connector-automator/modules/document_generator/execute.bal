@@ -16,7 +16,26 @@
 import wso2/connector_automator.utils;
 
 import ballerina/io;
-import ballerina/os;
+
+public function executeDocumentGeneration(string connectorPath, string[] excluded = []) returns error? {
+
+    if excluded.indexOf("client") is () {
+        check generateMainReadme(connectorPath);
+        check generateBallerinaReadme(connectorPath);
+    }
+    if excluded.indexOf("tests") is () {
+        check generateTestsReadme(connectorPath);
+    }
+    if excluded.indexOf("examples") is () {
+        check generateExamplesReadme(connectorPath);
+        check generateIndividualExampleReadmes(connectorPath);
+    }
+    if excluded.indexOf("metadata") is () {
+        check generateKeywords(connectorPath);
+    }
+
+    utils:logInfo("✓ documentation generated");
+}
 
 public function executeDocGen(string command, string connectorPath, string[] excluded = []) returns error? {
     utils:logVerbose(string `command: ${command}, connector: ${connectorPath}`);
@@ -40,6 +59,9 @@ public function executeDocGen(string command, string connectorPath, string[] exc
         "generate-main" => {
             check genMainReadme(connectorPath);
         }
+        "generate-metadata" => {
+            check genKeywords(connectorPath);
+        }
         _ => {
             utils:logError(string `unknown doc command: '${command}'`);
             printUsage();
@@ -48,10 +70,6 @@ public function executeDocGen(string command, string connectorPath, string[] exc
 }
 
 function generateAllReadmes(string connectorPath, string[] excluded) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-    utils:logVerbose("✓ AI generator initialized");
-
     utils:logVerbose("generating documentation files");
 
     if excluded.indexOf("client") is () {
@@ -65,14 +83,14 @@ function generateAllReadmes(string connectorPath, string[] excluded) returns err
         check generateExamplesReadme(connectorPath);
         check generateIndividualExampleReadmes(connectorPath);
     }
+    if excluded.indexOf("metadata") is () {
+        check generateKeywords(connectorPath);
+    }
 
     utils:logInfo(string `✓ documentation generated at ${connectorPath}/`);
 }
 
 function genBallerinaReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateBallerinaReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -82,9 +100,6 @@ function genBallerinaReadme(string connectorPath) returns error? {
 }
 
 function genTestsReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateTestsReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -94,9 +109,6 @@ function genTestsReadme(string connectorPath) returns error? {
 }
 
 function genExamplesReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateExamplesReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -106,9 +118,6 @@ function genExamplesReadme(string connectorPath) returns error? {
 }
 
 function genIndividualExampleReadmes(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateIndividualExampleReadmes(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -118,9 +127,6 @@ function genIndividualExampleReadmes(string connectorPath) returns error? {
 }
 
 function genMainReadme(string connectorPath) returns error? {
-    check validateApiKey();
-    check initDocumentationGenerator();
-
     error? result = generateMainReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -129,10 +135,11 @@ function genMainReadme(string connectorPath) returns error? {
     utils:logInfo(string `✓ README: ${connectorPath}/README.md`);
 }
 
-function validateApiKey() returns error? {
-    string? apiKey = os:getEnv("ANTHROPIC_API_KEY");
-    if apiKey is () || apiKey.trim().length() == 0 {
-        return error("ANTHROPIC_API_KEY not configured");
+function genKeywords(string connectorPath) returns error? {
+    error? result = generateKeywords(connectorPath);
+    if result is error {
+        utils:logError(string `keyword generation failed: ${result.message()}`);
+        return result;
     }
 }
 
@@ -149,6 +156,7 @@ function printUsage() {
     io:fprintln(io:stderr, "  generate-examples            Generate examples README");
     io:fprintln(io:stderr, "  generate-individual-examples Generate example READMEs");
     io:fprintln(io:stderr, "  generate-main                Generate root README");
+    io:fprintln(io:stderr, "  generate-metadata            Generate Ballerina.toml keywords");
     io:fprintln(io:stderr, "");
     io:fprintln(io:stderr, "ENVIRONMENT");
     io:fprintln(io:stderr, "  ANTHROPIC_API_KEY    Required for AI-powered documentation");

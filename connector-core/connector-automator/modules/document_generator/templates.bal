@@ -13,29 +13,56 @@
 // specific language governing permissions and limitations
 // under the License.
 
-final map<string> & readonly DOCUMENT_TEMPLATES = {
-    "ballerina_readme_template.md":
-        "# {{CONNECTOR_NAME}} Connector\n\n" +
-        "## Overview\n{{AI_GENERATED_OVERVIEW}}\n\n" +
-        "## Setup guide\n{{AI_GENERATED_SETUP}}\n\n" +
-        "## Quickstart\n{{AI_GENERATED_QUICKSTART}}\n\n" +
-        "## Examples\n{{AI_GENERATED_EXAMPLES}}\n",
+function ballerinaReadmeTemplate() returns string {
+    return string `# {{CONNECTOR_NAME}} Connector
 
-    "example_specific_template.md":
-        "{{AI_GENERATED_INDIVIDUAL_README}}\n",
+## Overview
+{{AI_GENERATED_OVERVIEW}}
 
-    "examples_readme_template.md":
-        "{{AI_GENERATED_MAIN_EXAMPLES_README}}\n",
+## Setup guide
+{{AI_GENERATED_SETUP}}
 
-    "main_readme_template.md":
-        "# {{CONNECTOR_NAME}}\n\n" +
-        "{{AI_GENERATED_HEADER_AND_BADGES}}\n\n" +
-        "## Overview\n{{AI_GENERATED_OVERVIEW}}\n\n" +
-        "## Setup guide\n{{AI_GENERATED_SETUP}}\n\n" +
-        "## Quickstart\n{{AI_GENERATED_QUICKSTART}}\n\n" +
-        "## Examples\n{{AI_GENERATED_EXAMPLES}}\n\n" +
-        "## Useful Links\n{{AI_GENERATED_USEFUL_LINKS}}\n",
+## Quickstart
+{{AI_GENERATED_QUICKSTART}}
 
-    "tests_readme_template.md":
-        "{{AI_GENERATED_TESTING_APPROACH}}\n"
-};
+## Examples
+{{AI_GENERATED_EXAMPLES}}
+`;
+}
+
+function testsReadmeTemplate() returns string {
+    return string `{{AI_GENERATED_TESTING_APPROACH}}
+`;
+}
+
+function exampleSpecificTemplate() returns string {
+    return string `{{AI_GENERATED_INDIVIDUAL_README}}
+`;
+}
+
+function examplesReadmeTemplate() returns string {
+    return string `{{AI_GENERATED_MAIN_EXAMPLES_README}}
+`;
+}
+
+function mainReadmeTemplate() returns string {
+    return string `# {{CONNECTOR_NAME}}
+
+{{AI_GENERATED_HEADER_AND_BADGES}}
+
+## Overview
+{{AI_GENERATED_OVERVIEW}}
+
+## Setup guide
+{{AI_GENERATED_SETUP}}
+
+## Quickstart
+{{AI_GENERATED_QUICKSTART}}
+
+## Examples
+{{AI_GENERATED_EXAMPLES}}
+
+## Useful Links
+{{AI_GENERATED_USEFUL_LINKS}}
+`;
+}

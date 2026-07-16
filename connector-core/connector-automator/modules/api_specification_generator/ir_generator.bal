@@ -14,7 +14,7 @@
 // under the License.
 
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 import wso2/connector_automator.utils;
 
@@ -143,7 +143,7 @@ function canonicalizeTypeName(string typeName) returns string {
     if t.length() == 0 {
         return t;
     }
-    return regex:replaceAll(t, "\\$", "");
+    return regexp:replaceAll(re `\$`, t, "");
 }
 
 # Return true if the type name is a Ballerina built-in that needs no definition.
@@ -185,7 +185,7 @@ function isBuiltinBallerina(string typeName) returns boolean {
 function addTypeRef(string typeStr, map<boolean> referenced) {
     string base = canonicalizeTypeName(extractBaseType(typeStr));
     if base.includes("|") {
-        string[] parts = regex:split(base, "\\|");
+        string[] parts = regexp:split(re `\|`, base);
         foreach string part in parts {
             string trimmed = part.trim();
             if trimmed.length() > 0 {
@@ -388,9 +388,9 @@ function deriveMemberName(string rawValue) returns string {
         string ch = v.substring(idx, idx + 1);
         if idx > 0 {
             string prev = v.substring(idx - 1, idx);
-            boolean chUpper = regex:matches(ch, "[A-Z]");
-            boolean prevLower = regex:matches(prev, "[a-z]");
-            boolean prevDigit = regex:matches(prev, "[0-9]");
+            boolean chUpper = regexp:isFullMatch(re `[A-Z]`, ch);
+            boolean prevLower = regexp:isFullMatch(re `[a-z]`, prev);
+            boolean prevDigit = regexp:isFullMatch(re `[0-9]`, prev);
             if chUpper && (prevLower || prevDigit) {
                 phased += "_";
             }
@@ -404,7 +404,7 @@ function deriveMemberName(string rawValue) returns string {
     int idx2 = 0;
     while idx2 < phased.length() {
         string ch = phased.substring(idx2, idx2 + 1);
-        if regex:matches(ch, "[A-Za-z0-9]") {
+        if regexp:isFullMatch(re `[A-Za-z0-9]`, ch) {
             replaced += ch;
         } else {
             replaced += "_";
@@ -416,7 +416,7 @@ function deriveMemberName(string rawValue) returns string {
     string upper = replaced.toUpperAscii();
 
     // Collapse consecutive underscores.
-    upper = regex:replaceAll(upper, "_+", "_");
+    upper = regexp:replaceAll(re `_+`, upper, "_");
 
     // Trim leading and trailing underscores.
     int trimStart = 0;
@@ -656,7 +656,7 @@ function mapJsonFieldToIRField(json fieldJson, map<boolean> enumSimpleNames) ret
     // Field is directly typed as an enum.
     json|error enumRefResult = fieldJson.enumReference;
     if enumRefResult is string && enumRefResult.trim().length() > 0 {
-        string[] parts = regex:split(enumRefResult, "\\.");
+        string[] parts = regexp:split(re `\.`, enumRefResult);
         balType = canonicalizeTypeName(parts[parts.length() - 1]);
     } else {
         // Interface field with concrete implementations — emit a union type.
@@ -666,7 +666,7 @@ function mapJsonFieldToIRField(json fieldJson, map<boolean> enumSimpleNames) ret
             string[] implSimpleNames = [];
             foreach json implFqn in ifaceImplsArr {
                 if implFqn is string && implFqn.trim().length() > 0 {
-                    string[] parts = regex:split(implFqn, "\\.");
+                    string[] parts = regexp:split(re `\.`, implFqn);
                     implSimpleNames.push(canonicalizeTypeName(parts[parts.length() - 1]));
                 }
             }
@@ -677,7 +677,7 @@ function mapJsonFieldToIRField(json fieldJson, map<boolean> enumSimpleNames) ret
             // Field is a collection whose element is a member-class type.
             json|error memberRefResult = fieldJson.memberReference;
             if memberRefResult is string && memberRefResult.trim().length() > 0 {
-                string[] parts = regex:split(memberRefResult, "\\.");
+                string[] parts = regexp:split(re `\.`, memberRefResult);
                 string memberSimpleName = canonicalizeTypeName(parts[parts.length() - 1]);
 
                 string fullType = "";

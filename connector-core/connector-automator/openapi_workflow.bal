@@ -30,6 +30,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
 
     utils:LogLevel level = logLevel == "quiet" ? "quiet" : logLevel == "verbose" ? "verbose" : "normal";
     utils:initLogLevel(level);
+    check utils:initAIService();
     boolean interactive = interactiveArg == "interactive";
     string[] excluded = excludedStages.length() == 0 ? [] : re`,`.split(excludedStages);
 
@@ -228,7 +229,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     if excluded.indexOf("docs") is () {
         step += 1;
         utils:logStep(step, total, "Generating Documentation");
-        error? docResult = document_generator:executeDocGen("generate-all", outputDir, excluded);
+        error? docResult = document_generator:executeDocumentGeneration(outputDir, excluded);
         if docResult is error {
             utils:logWarn(string `documentation generation failed: ${docResult.message()}`);
         } else {

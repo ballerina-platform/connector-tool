@@ -14,6 +14,7 @@
 // under the License.
 
 import ballerina/io;
+import ballerina/lang.regexp;
 
 // Helper function to extract API context (info section)
 function extractApiContext(json spec) returns string {
@@ -97,19 +98,25 @@ function isInvalidDescription(map<json> fieldMap) returns boolean {
 }
 
 // Helper function to collect description requests from schema
-function collectDescriptionRequests(map<json> schemaMap, string schemaName, string pathPrefix,
-        DescriptionRequest[] requests, map<string> locationMap, json fullSpec) {
+// Locations for schema/property descriptions are carried as segment arrays
+// (e.g. ["User", "properties", "user.name"]) rather than dot-joined strings, so
+// that property names legally containing dots do not corrupt navigation.
+function collectDescriptionRequests(map<json> schemaMap, string schemaName, string[] pathSegments,
+        DescriptionRequest[] requests, map<string|string[]> locationMap, json fullSpec) {
+    string[] effectiveSegments = pathSegments.length() > 0 ? pathSegments : [schemaName];
+    string displayPath = string:'join(".", ...effectiveSegments);
+
     // Check if schema itself needs description
     if isInvalidDescription(schemaMap) {
-        string requestId = generateRequestId(schemaName, pathPrefix, "schema");
+        string requestId = generateRequestId(schemaName, encodeSegments(effectiveSegments), "schema");
         string context = string `Schema '${schemaName}' definition: ${schemaMap.toString()}`;
         requests.push({
             id: requestId,
             name: schemaName,
             context: context,
-            schemaPath: pathPrefix.length() > 0 ? pathPrefix : schemaName
+            schemaPath: displayPath
         });
-        locationMap[requestId] = pathPrefix.length() > 0 ? pathPrefix : schemaName;
+        locationMap[requestId] = effectiveSegments;
     }
 
     // Process properties
@@ -117,7 +124,7 @@ function collectDescriptionRequests(map<json> schemaMap, string schemaName, stri
         json|error propertiesResult = schemaMap.get("properties");
         if propertiesResult is map<json> {
             map<json> properties = <map<json>>propertiesResult;
-            collectPropertyDescriptionRequests(properties, schemaName, pathPrefix, requests, locationMap, fullSpec);
+            collectPropertyDescriptionRequests(properties, schemaName, effectiveSegments, requests, locationMap, fullSpec);
         }
     }
 
@@ -132,10 +139,8 @@ function collectDescriptionRequests(map<json> schemaMap, string schemaName, stri
                     json nestedItem = nestedArray[i];
                     if nestedItem is map<json> {
                         map<json> nestedItemMap = <map<json>>nestedItem;
-                        string nestedPath = pathPrefix.length() > 0 ?
-                            pathPrefix + "." + nestedType + "[" + i.toString() + "]" :
-                            schemaName + "." + nestedType + "[" + i.toString() + "]";
-                        collectDescriptionRequests(nestedItemMap, schemaName, nestedPath, requests, locationMap, fullSpec);
+                        string[] nestedSegments = [...effectiveSegments, nestedType + "[" + i.toString() + "]"];
+                        collectDescriptionRequests(nestedItemMap, schemaName, nestedSegments, requests, locationMap, fullSpec);
                     }
                 }
             }
@@ -144,19 +149,18 @@ function collectDescriptionRequests(map<json> schemaMap, string schemaName, stri
 }
 
 // Helper function to collect property description requests
-function collectPropertyDescriptionRequests(map<json> properties, string parentSchemaName, string pathPrefix,
-        DescriptionRequest[] requests, map<string> locationMap, json fullSpec) {
+function collectPropertyDescriptionRequests(map<json> properties, string parentSchemaName, string[] pathSegments,
+        DescriptionRequest[] requests, map<string|string[]> locationMap, json fullSpec) {
     foreach string propertyName in properties.keys() {
         json|error propertyResult = properties.get(propertyName);
         if propertyResult is map<json> {
             map<json> propertyMap = <map<json>>propertyResult;
-            string propertyPath = pathPrefix.length() > 0 ?
-                pathPrefix + ".properties." + propertyName :
-                parentSchemaName + ".properties." + propertyName;
+            string[] propertySegments = [...pathSegments, "properties", propertyName];
+            string propertyPath = string:'join(".", ...propertySegments);
 
             // Check if property needs description
             if isInvalidDescription(propertyMap) {
-                string requestId = generateRequestId(parentSchemaName, propertyPath, "property");
+                string requestId = generateRequestId(parentSchemaName, encodeSegments(propertySegments), "property");
                 string context = string `Property '${propertyName}' in schema '${parentSchemaName}'. Property definition: ${propertyMap.toString()}`;
                 // add schema type infor to context for better IA understanding
                 if propertyMap.hasKey("type") {
@@ -178,7 +182,7 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                     context: context,
                     schemaPath: propertyPath
                 });
-                locationMap[requestId] = propertyPath;
+                locationMap[requestId] = propertySegments;
             }
 
             // Recursively process nested properties
@@ -186,7 +190,7 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                 json|error nestedPropertiesResult = propertyMap.get("properties");
                 if nestedPropertiesResult is map<json> {
                     map<json> nestedProperties = <map<json>>nestedPropertiesResult;
-                    collectPropertyDescriptionRequests(nestedProperties, parentSchemaName, propertyPath, requests, locationMap, fullSpec);
+                    collectPropertyDescriptionRequests(nestedProperties, parentSchemaName, propertySegments, requests, locationMap, fullSpec);
                 }
             }
 
@@ -199,8 +203,8 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                         json|error itemPropertiesResult = items.get("properties");
                         if itemPropertiesResult is map<json> {
                             map<json> itemProperties = <map<json>>itemPropertiesResult;
-                            string itemPath = propertyPath + ".items";
-                            collectPropertyDescriptionRequests(itemProperties, parentSchemaName, itemPath, requests, locationMap, fullSpec);
+                            string[] itemSegments = [...propertySegments, "items"];
+                            collectPropertyDescriptionRequests(itemProperties, parentSchemaName, itemSegments, requests, locationMap, fullSpec);
                         }
                     }
                 }
@@ -483,7 +487,7 @@ function containsSchemaReference(json data, string refPattern) returns boolean {
 }
 
 // Helper function to collect parameter description requests
-function collectParameterDescriptionRequests(json spec, DescriptionRequest[] requests, map<string> locationMap) {
+function collectParameterDescriptionRequests(json spec, DescriptionRequest[] requests, map<string|string[]> locationMap) {
     json|error pathsResult = spec.paths;
     if pathsResult is map<json> {
         foreach string path in pathsResult.keys() {
@@ -518,7 +522,7 @@ function collectParameterDescriptionRequests(json spec, DescriptionRequest[] req
                                                     string paramIn = paramMap.hasKey("in") ? <string>paramMap.get("in") : "query";
                                                     string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
 
-                                                    string requestId = generateRequestId("param", string `${path}_${method}_${paramName}`, "parameter");
+                                                    string requestId = generateRequestId("param", encodeSegments([path, method, paramName]), "parameter");
                                                     string context = string `${paramIn} parameter '${paramName}' for operation: ${operationId}. Parameter definition: ${paramMap.toString()}`;
 
                                                     // Add schema type info for better context
@@ -572,7 +576,7 @@ function collectParameterDescriptionRequests(json spec, DescriptionRequest[] req
 }
 
 // Helper function to collect operation description requests (for client return parameters)
-function collectOperationDescriptionRequests(json spec, DescriptionRequest[] requests, map<string> locationMap) {
+function collectOperationDescriptionRequests(json spec, DescriptionRequest[] requests, map<string|string[]> locationMap) {
     json|error pathsResult = spec.paths;
     if pathsResult is map<json> {
         foreach string path in pathsResult.keys() {
@@ -592,7 +596,7 @@ function collectOperationDescriptionRequests(json spec, DescriptionRequest[] req
                                 string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
                                 string summary = operation.hasKey("summary") ? <string>operation.get("summary") : "";
 
-                                string requestId = generateRequestId("operation", string `${path}_${method}`, "description");
+                                                                string requestId = generateRequestId("operation", encodeSegments([path, method]), "description");
                                 string context = string `Operation '${operationId}' (${method.toUpperAscii()} ${path})`;
                                 if summary.length() > 0 {
                                     context += string `. Summary: ${summary}`;
@@ -645,7 +649,7 @@ function collectOperationDescriptionRequests(json spec, DescriptionRequest[] req
                                                         string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
                                                         string summary = operation.hasKey("summary") ? <string>operation.get("summary") : "";
 
-                                                        string requestId = generateRequestId("response", string `${path}_${method}_${responseCode}`, "description");
+                                                        string requestId = generateRequestId("response", encodeSegments([path, method, responseCode]), "description");
                                                         string context = string `Response description for ${responseCode} status in operation '${operationId}' (${method.toUpperAscii()} ${path}).`;
                                                         if summary.length() > 0 {
                                                             context += string ` Operation summary: ${summary}.`;
@@ -720,7 +724,7 @@ function collectOperationSummaryRequests(json spec, DescriptionRequest[] request
                             if needsSummary {
                                 string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
 
-                                string requestId = generateRequestId("operation", string `${path}_${method}`, "summary");
+                                string requestId = generateRequestId("operation", encodeSegments([path, method]), "summary");
                                 string context = string `Operation '${operationId}' (${method.toUpperAscii()} ${path})`;
 
                                 if tooLong {
@@ -815,4 +819,19 @@ function getSchemaDescriptionFromSpec(string schemaName, json spec) returns stri
         }
     }
     return ();
+}
+
+// Encodes string segments injectively using __ as segment separator,
+// escaping _ to _u, . to _d, [ to _l, ] to _r, and / to _s.
+function encodeSegments(string[] segments) returns string {
+    string[] encoded = [];
+    foreach string segment in segments {
+        string s = regexp:replaceAll(re `_`, segment, "_u");
+        s = regexp:replaceAll(re `\.`, s, "_d");
+        s = regexp:replaceAll(re `\[`, s, "_l");
+        s = regexp:replaceAll(re `\]`, s, "_r");
+        s = regexp:replaceAll(re `/`, s, "_s");
+        encoded.push(s);
+    }
+    return string:'join("__", ...encoded);
 }

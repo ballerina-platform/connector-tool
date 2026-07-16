@@ -13,13 +13,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
+
+type ConnectorKeywords record {|
+    string cost;
+    string vendor;
+    string area;
+|};
+
 public type ConnectorMetadata record {
     string connectorName;
     string version;
     string[] examples;
     string clientBalContent;
     string typesBalContent;
-
+    string[] existingKeywords;
+    string? description;
+    string? icon;
 };
 
 public type ExampleData record {|
@@ -28,4 +37,23 @@ public type ExampleData record {|
     string[] balFiles;
     string[] balFileContents;
     string mainBalContent;
+|};
+
+public type TemplateData record {|
+    string CONNECTOR_NAME?;
+    string VERSION?;
+    string DESCRIPTION?;
+    string AI_GENERATED_OVERVIEW?;
+    string AI_GENERATED_SETUP?;
+    string AI_GENERATED_QUICKSTART?;
+    string AI_GENERATED_EXAMPLES?;
+    string AI_GENERATED_USAGE?;
+    string AI_GENERATED_TESTING_APPROACH?;
+    string AI_GENERATED_TEST_SCENARIOS?;
+    string AI_GENERATED_EXAMPLE_DESCRIPTIONS?;
+    string AI_GENERATED_GETTING_STARTED?;
+    string AI_GENERATED_HEADER_AND_BADGES?;
+    string AI_GENERATED_USEFUL_LINKS?;
+    string AI_GENERATED_INDIVIDUAL_README?;
+    string AI_GENERATED_MAIN_EXAMPLES_README?;
 |};

@@ -305,13 +305,11 @@ bal run -- openapi pipeline <spec> <output-dir> [options]
 |--------|-------------|
 | `yes` | Auto-confirm all prompts |
 | `quiet` | Minimal logging output |
-| `regenerate` | Reapply recorded sanitations and recover existing tests/examples for a new API spec version |
 
 **Example:**
 ```bash
 bal run -- openapi pipeline ./openapi.yaml ./my-connector yes
 bal run -- openapi pipeline ./openapi.yaml ./my-connector yes quiet
-bal run -- openapi pipeline ./openapi.yaml ./my-connector yes quiet regenerate
 ```
 
 **Pipeline Steps:**
@@ -322,7 +320,7 @@ bal run -- openapi pipeline ./openapi.yaml ./my-connector yes quiet regenerate
 5. Generate mock server + live tests
 6. Generate documentation
 
-When `regenerate` is supplied, the pipeline applies `docs/spec/sanitations.md` to the new specification before sanitizing, attempts to repair existing generated code, and regenerates incompatible tests and examples when recovery is not possible.
+Re-running the pipeline on an existing connector directory applies `docs/spec/sanitations.md` to the new specification before sanitizing (when that file is present and ready), cleans stale tests and examples before regenerating them, and applies layered compilation-error recovery during the client stage.
 
 ### OpenAPI Step-by-Step Commands
 

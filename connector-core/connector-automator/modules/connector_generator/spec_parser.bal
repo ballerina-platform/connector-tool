@@ -14,7 +14,7 @@
 // under the License.
 
 import ballerina/io;
-import ballerina/regex;
+import ballerina/lang.regexp;
 
 # Parse API spec file and extract types block and client method signatures.
 #
@@ -32,7 +32,7 @@ public function parseApiSpec(string apiSpecPath) returns ParsedApiSpec|error {
 
     SpecMethodSignature[] methods = [];
     string configTypeName = "ConnectionConfig";
-    string[] lines = regex:split(clientBlock, "\n");
+    string[] lines = regexp:split(re `\n`, clientBlock);
     string pendingRemote = "";
     string pendingInit = "";
     foreach string rawLine in lines {
@@ -92,7 +92,7 @@ public function parseApiSpec(string apiSpecPath) returns ParsedApiSpec|error {
 }
 
 function stripTrailingClientDocLines(string headerAndTypes) returns string {
-    string[] lines = regex:split(headerAndTypes, "\n");
+    string[] lines = regexp:split(re `\n`, headerAndTypes);
     int endExclusive = lines.length();
 
     while endExclusive > 0 {
