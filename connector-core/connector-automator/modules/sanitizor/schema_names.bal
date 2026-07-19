@@ -1,0 +1,271 @@
+// Copyright (c) 2026 WSO2 LLC. (http://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+import ballerina/data.jsondata;
+import ballerina/file;
+import ballerina/io;
+import ballerina/lang.array;
+
+# Review all previously unseen component schema names and persist stable decisions.
+#
+# + specFilePath - Aligned OpenAPI JSON file to update
+# + mappingFilePath - Stable schema-name mapping file
+# + config - Optional AI retry configuration
+# + return - Schema-name processing counts or an error
+public function improveSchemaNamesBatchWithRetry(string specFilePath, string mappingFilePath,
+        RetryConfig? config = ()) returns SchemaNameImprovementResult|error {
+    map<json> persistedMappings = {};
+    boolean|file:Error mappingsExist = file:test(mappingFilePath, file:EXISTS);
+    if mappingsExist is file:Error {
+        return error("Failed to check schema names file", mappingsExist);
+    }
+    if mappingsExist {
+        json|error mappingResult = io:fileReadJson(mappingFilePath);
+        if mappingResult is error {
+            return error("Failed to read schema names file", mappingResult);
+        }
+        if !(mappingResult is map<json>) {
+            return error("Invalid schema names file: root must be a JSON object");
+        }
+        persistedMappings = <map<json>>mappingResult;
+    }
+
+    json|error specResult = io:fileReadJson(specFilePath);
+    if specResult is error {
+        return error("Failed to read OpenAPI spec file", specResult);
+    }
+    if !(specResult is map<json>) {
+        return error("spec is not a valid JSON object");
+    }
+    map<json> specMap = <map<json>>specResult;
+
+    map<json> schemas = {};
+    map<json>? components = ();
+    if specMap.hasKey("components") {
+        json|error componentsResult = specMap.get("components");
+        if !(componentsResult is map<json>) {
+            return error("Invalid components section in OpenAPI spec");
+        }
+        map<json> componentsMap = <map<json>>componentsResult;
+        components = componentsMap;
+        if componentsMap.hasKey("schemas") {
+            json|error schemasResult = componentsMap.get("schemas");
+            if !(schemasResult is map<json>) {
+                return error("Invalid components.schemas section in OpenAPI spec");
+            }
+            schemas = <map<json>>schemasResult;
+        }
+    }
+
+    int reused = 0;
+    map<string> reusedMappings = {};
+    SchemaRenameRequest[] requests = [];
+    string[] reusedNames = [];
+    string apiContext = extractApiContext(specMap);
+    foreach string schemaName in schemas.keys() {
+        if persistedMappings.hasKey(schemaName) {
+            json|error mappedResult = persistedMappings.get(schemaName);
+            if !(mappedResult is string) {
+                return error(string `Invalid schema mapping for '${schemaName}': improved name must be a string`);
+            }
+            string mappedName = mappedResult;
+            string improvedName = mappedName.trim();
+            if !isValidSchemaName(improvedName) {
+                return error(string `Invalid schema mapping: '${schemaName}' -> '${improvedName}'`);
+            }
+            if improvedName != schemaName && schemas.hasKey(improvedName) {
+                return error(string `Cannot apply schema mapping '${schemaName}' -> '${improvedName}': both names exist in the aligned spec`);
+            }
+            if reusedNames.indexOf(improvedName) is int {
+                return error(string `Invalid schema names file: duplicate improved name '${improvedName}'`);
+            }
+            reusedMappings[schemaName] = improvedName;
+            reusedNames.push(improvedName);
+            reused += 1;
+            continue;
+        }
+
+        json|error schemaResult = schemas.get(schemaName);
+        if schemaResult is json {
+            requests.push({
+                originalName: schemaName,
+                schemaDefinition: schemaResult.toJsonString(),
+                usageContext: extractSchemaUsageContext(schemaName, specMap)
+            });
+        }
+    }
+
+    string[] reservedNames = schemas.keys();
+    foreach string target in reusedNames {
+        if reservedNames.indexOf(target) is () {
+            reservedNames.push(target);
+        }
+    }
+
+    map<string> aiMappings = {};
+    int reviewed = 0;
+    int startIdx = 0;
+    while startIdx < requests.length() {
+        int endIdx = startIdx + BATCH_SIZE;
+        if endIdx > requests.length() {
+            endIdx = requests.length();
+        }
+        SchemaRenameRequest[] batch = requests.slice(startIdx, endIdx);
+        BatchRenameResponse[]|error responseResult = generateSchemaNamesBatchWithRetry(
+            batch, apiContext, reservedNames, config);
+        if responseResult is error {
+            return error(string `Schema naming batch ${(startIdx / BATCH_SIZE) + 1} failed`, responseResult);
+        }
+
+        map<boolean> expected = {};
+        foreach SchemaRenameRequest request in batch {
+            expected[request.originalName] = true;
+        }
+        map<boolean> received = {};
+        foreach BatchRenameResponse response in responseResult {
+            string originalName = response.originalName;
+            string improvedName = response.newName.trim();
+            if !expected.hasKey(originalName) {
+                return error(string `AI returned an unexpected schema name '${originalName}'`);
+            }
+            if received.hasKey(originalName) {
+                return error(string `AI returned schema '${originalName}' more than once`);
+            }
+            if !isValidSchemaName(improvedName) {
+                return error(string `AI returned invalid schema name '${improvedName}' for '${originalName}'`);
+            }
+            if improvedName != originalName && reservedNames.indexOf(improvedName) is int {
+                return error(string `AI returned conflicting schema name '${improvedName}' for '${originalName}'`);
+            }
+            received[originalName] = true;
+            aiMappings[originalName] = improvedName;
+            reservedNames.push(improvedName);
+            reviewed += 1;
+        }
+        if received.length() != batch.length() {
+            return error(string `AI returned ${received.length()} schema names for a batch of ${batch.length()}`);
+        }
+        startIdx = endIdx;
+    }
+
+    map<string> currentMappings = reusedMappings;
+    foreach string originalName in aiMappings.keys() {
+        string? improvedName = aiMappings[originalName];
+        if improvedName is string {
+            currentMappings[originalName] = improvedName;
+        }
+    }
+
+    int renamed = 0;
+    foreach string schemaName in schemas.keys() {
+        string? improvedName = currentMappings[schemaName];
+        if improvedName is string {
+            if improvedName != schemaName {
+                renamed += 1;
+            }
+        }
+    }
+
+    json updatedSpec = specMap;
+    if components is map<json> && currentMappings.length() > 0 {
+        map<json> renamedSchemas = {};
+        foreach string schemaName in schemas.keys() {
+            json|error schemaValue = schemas.get(schemaName);
+            if schemaValue is json {
+                string targetName = currentMappings[schemaName] ?: schemaName;
+                renamedSchemas[targetName] = schemaValue;
+            }
+        }
+        components["schemas"] = renamedSchemas;
+        specMap["components"] = components;
+        updatedSpec = updateSchemaReferences(specMap, currentMappings);
+    }
+
+    map<json> mappingsToPersist = {};
+    foreach string originalName in currentMappings.keys() {
+        string? improvedName = currentMappings[originalName];
+        if improvedName is string {
+            mappingsToPersist[originalName] = improvedName;
+        }
+    }
+    check writeSchemaNameMappings(mappingFilePath, mappingsToPersist);
+    check writeJsonAtomically(specFilePath, updatedSpec, "OpenAPI spec");
+    return {mappingsReused: reused, schemasReviewed: reviewed, schemasRenamed: renamed};
+}
+
+function writeSchemaNameMappings(string mappingFilePath, map<json> mappings) returns error? {
+    string[] names = mappings.keys().sort(array:ASCENDING);
+    map<json> sortedMappings = {};
+    foreach string name in names {
+        json? improvedName = mappings[name];
+        if improvedName is string {
+            sortedMappings[name] = improvedName;
+        }
+    }
+    check writeJsonAtomically(mappingFilePath, sortedMappings, "schema names file");
+}
+
+function writeJsonAtomically(string targetPath, json content, string description) returns error? {
+    string|error prettyResult = jsondata:prettify(content);
+    if prettyResult is error {
+        return error(string `Failed to prettify ${description}`, prettyResult);
+    }
+    string temporaryPath = targetPath + ".tmp";
+    error? writeResult = io:fileWriteString(temporaryPath, prettyResult);
+    if writeResult is error {
+        return error(string `Failed to write temporary ${description}`, writeResult);
+    }
+
+    string backupPath = targetPath + ".bak";
+    boolean|file:Error targetExists = file:test(targetPath, file:EXISTS);
+    if targetExists is file:Error {
+        check file:remove(temporaryPath);
+        return error(string `Failed to check existing ${description}`, targetExists);
+    }
+    if targetExists {
+        boolean|file:Error backupExists = file:test(backupPath, file:EXISTS);
+        if backupExists is file:Error {
+            check file:remove(temporaryPath);
+            return error(string `Failed to check ${description} backup`, backupExists);
+        }
+        if backupExists {
+            check file:remove(backupPath);
+        }
+        error? backupResult = file:rename(targetPath, backupPath);
+        if backupResult is error {
+            check file:remove(temporaryPath);
+            return error(string `Failed to back up existing ${description}`, backupResult);
+        }
+    }
+
+    error? renameResult = file:rename(temporaryPath, targetPath);
+    if renameResult is error {
+        do {
+            check file:remove(temporaryPath);
+        } on fail {
+        }
+        if targetExists {
+            do {
+                check file:rename(backupPath, targetPath);
+            } on fail {
+            }
+        }
+        return error(string `Failed to publish ${description}`, renameResult);
+    }
+    if targetExists {
+        check file:remove(backupPath);
+    }
+}

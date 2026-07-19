@@ -124,12 +124,14 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
         utils:logInfo(string `  improved ${operationIdResult} operationId${operationIdResult == 1 ? "" : "s"}`);
     }
 
-    // Step 6: Schema renaming
-    utils:logVerbose("renaming InlineResponse schemas");
-    int|error schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec);
+    // Step 6: Stable schema-name improvement
+    utils:logVerbose("improving schema names");
+    string schemaNamesPath = specDir + "/schema_names.json";
+    SchemaNameImprovementResult|error schemaRenameResult = improveSchemaNamesBatchWithRetry(
+        alignedSpec, schemaNamesPath);
     if schemaRenameResult is error {
-        utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`);
+        return error("Schema-name improvement failed", schemaRenameResult);
     } else {
-        utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`);
+        utils:logInfo("     schema names improved");
     }
 }

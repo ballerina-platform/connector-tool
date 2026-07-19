@@ -233,7 +233,7 @@ ${i + 1}. Original: ${req.originalName}
 
     string existingNamesStr = string:'join(", ", ...existingNames);
 
-    string prompt = string `You are an expert in naming OpenAPI schemas. Generate meaningful, unique PascalCase names for these schemas.
+    string prompt = string `You are an expert in naming OpenAPI schemas. Review each schema name and return a meaningful, unique PascalCase name.
 
 API CONTEXT:
 ${apiContext}
@@ -249,6 +249,8 @@ REQUIREMENTS:
 - Be descriptive but concise (2-3 words max)
 - Ensure names are unique and don't conflict with existing names
 - Consider schema role (Request, Response, List, Details, etc.)
+- If the original name is already clear and meaningful, return it unchanged
+- Return exactly one result for every input schema and preserve each originalName exactly
 - Do not include fenced code blocks in the response. 
 
 REQUIRED RESPONSE FORMAT (JSON):

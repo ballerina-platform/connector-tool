@@ -47,6 +47,12 @@ public type BatchRenameResponse record {
     string newName;
 };
 
+public type SchemaNameImprovementResult record {|
+    int mappingsReused;
+    int schemasReviewed;
+    int schemasRenamed;
+|};
+
 public type OperationIdRequest record {
     string id;
     string path;

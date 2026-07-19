@@ -336,14 +336,26 @@ bal run -- openapi sanitize <spec> <output-dir> [options]
 - Flattens nested `$ref` references
 - Aligns with Ballerina naming conventions
 - Generates missing `operationId` values using AI
-- Renames generic `InlineResponse` schemas to meaningful names
+- Reviews every schema name with AI once and preserves the decision across regenerations
 - Adds missing field descriptions
 - Generates `docs/spec/sanitations.md` to record transformations for future regeneration
 
 **Output:**
 - `<output-dir>/docs/spec/flattened_openapi.json`
 - `<output-dir>/docs/spec/aligned_ballerina_openapi.json`
+- `<output-dir>/docs/spec/schema_names.json`
 - `<output-dir>/docs/spec/sanitations.md`
+
+`schema_names.json` stores each current aligned schema name and its stable AI-reviewed name as a direct mapping.
+Mappings for schemas removed from the current vendor spec are dropped. Identity mappings record names that were
+reviewed and intentionally kept unchanged:
+
+```json
+{
+  "InlineResponse200": "UserListResponse",
+  "User": "User"
+}
+```
 
 #### 2. Generate Ballerina Client
 
@@ -441,7 +453,9 @@ bal run -- openapi generate-docs generate-all ./my-connector yes
 ├── docs/
 │   └── spec/
 │       ├── flattened_openapi.json
-│       └── aligned_ballerina_openapi.json
+│       ├── aligned_ballerina_openapi.json
+│       ├── schema_names.json
+│       └── sanitations.md
 ├── ballerina/
 │   ├── Ballerina.toml
 │   ├── client.bal
