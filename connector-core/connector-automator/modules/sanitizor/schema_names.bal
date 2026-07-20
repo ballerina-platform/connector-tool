@@ -22,27 +22,38 @@ import ballerina/lang.array;
 # Review all previously unseen component schema names and persist stable decisions.
 #
 # + specFilePath - Aligned OpenAPI JSON file to update
-# + mappingFilePath - Stable schema-name mapping file
+# + aiMappingsFilePath - Stable AI-generated name mappings file
 # + config - Optional AI retry configuration
 # + return - Schema-name processing counts or an error
-public function improveSchemaNamesBatchWithRetry(string specFilePath, string mappingFilePath,
+public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiMappingsFilePath,
         RetryConfig? config = ()) returns SchemaNameImprovementResult|error {
+
+    // Read persisted AI mappings and extract schema-name mappings, if any.
+    map<json> aiMappingsDocument = {};
     map<json> persistedMappings = {};
-    boolean|file:Error mappingsExist = file:test(mappingFilePath, file:EXISTS);
+    boolean|file:Error mappingsExist = file:test(aiMappingsFilePath, file:EXISTS);
     if mappingsExist is file:Error {
-        return error("Failed to check schema names file", mappingsExist);
+        return error("Failed to check AI mappings file", mappingsExist);
     }
     if mappingsExist {
-        json|error mappingResult = io:fileReadJson(mappingFilePath);
+        json|error mappingResult = io:fileReadJson(aiMappingsFilePath);
         if mappingResult is error {
-            return error("Failed to read schema names file", mappingResult);
+            return error("Failed to read AI mappings file", mappingResult);
         }
         if !(mappingResult is map<json>) {
-            return error("Invalid schema names file: root must be a JSON object");
+            return error("Invalid AI mappings file: root must be a JSON object");
         }
-        persistedMappings = <map<json>>mappingResult;
+        aiMappingsDocument = mappingResult;
+        if aiMappingsDocument.hasKey("schemaNames") {
+            json|error schemaNamesResult = aiMappingsDocument.get("schemaNames");
+            if !(schemaNamesResult is map<json>) {
+                return error("Invalid AI mappings file: schemaNames must be a JSON object");
+            }
+            persistedMappings = schemaNamesResult;
+        }
     }
 
+    // Read the OpenAPI spec
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
         return error("Failed to read OpenAPI spec file", specResult);
@@ -52,7 +63,8 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
     }
     map<json> specMap = <map<json>>specResult;
 
-    map<json> schemas = {};
+
+    map<map<json>> schemas = {};
     map<json>? components = ();
     if specMap.hasKey("components") {
         json|error componentsResult = specMap.get("components");
@@ -66,7 +78,14 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
             if !(schemasResult is map<json>) {
                 return error("Invalid components.schemas section in OpenAPI spec");
             }
-            schemas = <map<json>>schemasResult;
+            map<json> schemaDefinitions = schemasResult;
+            foreach string schemaName in schemaDefinitions.keys() {
+                json|error schemaDefinitionResult = schemaDefinitions.get(schemaName);
+                if !(schemaDefinitionResult is map<json>) {
+                    return error(string `Invalid schema definition for '${schemaName}': expected a JSON object`);
+                }
+                schemas[schemaName] = schemaDefinitionResult;
+            }
         }
     }
 
@@ -90,7 +109,7 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
                 return error(string `Cannot apply schema mapping '${schemaName}' -> '${improvedName}': both names exist in the aligned spec`);
             }
             if reusedNames.indexOf(improvedName) is int {
-                return error(string `Invalid schema names file: duplicate improved name '${improvedName}'`);
+                return error(string `Invalid AI schema-name mappings: duplicate improved name '${improvedName}'`);
             }
             reusedMappings[schemaName] = improvedName;
             reusedNames.push(improvedName);
@@ -98,14 +117,12 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
             continue;
         }
 
-        json|error schemaResult = schemas.get(schemaName);
-        if schemaResult is json {
-            requests.push({
-                originalName: schemaName,
-                schemaDefinition: schemaResult.toJsonString(),
-                usageContext: extractSchemaUsageContext(schemaName, specMap)
-            });
-        }
+        map<json> schemaDefinition = schemas.get(schemaName);
+        requests.push({
+            originalName: schemaName,
+            schemaDefinition: schemaDefinition.toJsonString(),
+            usageContext: extractSchemaUsageContext(schemaName, specMap)
+        });
     }
 
     string[] reservedNames = schemas.keys();
@@ -115,6 +132,7 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
         }
     }
 
+    // Create AI mapping with batch retry.
     map<string> aiMappings = {};
     int reviewed = 0;
     int startIdx = 0;
@@ -161,6 +179,7 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
         startIdx = endIdx;
     }
 
+    // Merge reused and AI-generated mappings.
     map<string> currentMappings = reusedMappings;
     foreach string originalName in aiMappings.keys() {
         string? improvedName = aiMappings[originalName];
@@ -169,6 +188,7 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
         }
     }
 
+    // Update the spec with current mapping.
     int renamed = 0;
     foreach string schemaName in schemas.keys() {
         string? improvedName = currentMappings[schemaName];
@@ -179,15 +199,13 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
         }
     }
 
-    json updatedSpec = specMap;
+    map<json> updatedSpec = specMap;
     if components is map<json> && currentMappings.length() > 0 {
-        map<json> renamedSchemas = {};
+        map<map<json>> renamedSchemas = {};
         foreach string schemaName in schemas.keys() {
-            json|error schemaValue = schemas.get(schemaName);
-            if schemaValue is json {
-                string targetName = currentMappings[schemaName] ?: schemaName;
-                renamedSchemas[targetName] = schemaValue;
-            }
+            map<json> schemaDefinition = schemas.get(schemaName);
+            string targetName = currentMappings[schemaName] ?: schemaName;
+            renamedSchemas[targetName] = schemaDefinition;
         }
         components["schemas"] = renamedSchemas;
         specMap["components"] = components;
@@ -201,21 +219,22 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string map
             mappingsToPersist[originalName] = improvedName;
         }
     }
-    check writeSchemaNameMappings(mappingFilePath, mappingsToPersist);
+    check writeAiMappings(aiMappingsFilePath, aiMappingsDocument, mappingsToPersist);
     check writeJsonAtomically(specFilePath, updatedSpec, "OpenAPI spec");
     return {mappingsReused: reused, schemasReviewed: reviewed, schemasRenamed: renamed};
 }
 
-function writeSchemaNameMappings(string mappingFilePath, map<json> mappings) returns error? {
-    string[] names = mappings.keys().sort(array:ASCENDING);
+function writeAiMappings(string aiMappingsFilePath, map<json> aiMappings, map<json> schemaNameMappings) returns error? {
+    string[] names = schemaNameMappings.keys().sort(array:ASCENDING);
     map<json> sortedMappings = {};
     foreach string name in names {
-        json? improvedName = mappings[name];
+        json? improvedName = schemaNameMappings[name];
         if improvedName is string {
             sortedMappings[name] = improvedName;
         }
     }
-    check writeJsonAtomically(mappingFilePath, sortedMappings, "schema names file");
+    aiMappings["schemaNames"] = sortedMappings;
+    check writeJsonAtomically(aiMappingsFilePath, aiMappings, "AI mappings file");
 }
 
 function writeJsonAtomically(string targetPath, json content, string description) returns error? {

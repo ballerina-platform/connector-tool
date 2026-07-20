@@ -476,7 +476,7 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, R
         componentsMap["schemas"] = newSchemas;
         specMap["components"] = componentsMap;
 
-        json updatedSpecResult = updateSchemaReferences(specMap, nameMapping);
+        map<json> updatedSpecResult = updateSchemaReferences(specMap, nameMapping);
 
         string|error prettifiedResult = jsondata:prettify(updatedSpecResult);
         if prettifiedResult is error {

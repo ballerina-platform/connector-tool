@@ -126,9 +126,9 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     // Step 6: Stable schema-name improvement
     utils:logVerbose("improving schema names");
-    string schemaNamesPath = specDir + "/schema_names.json";
+    string aiMappingsPath = specDir + "/ai-mappings.json";
     SchemaNameImprovementResult|error schemaRenameResult = improveSchemaNamesBatchWithRetry(
-        alignedSpec, schemaNamesPath);
+        alignedSpec, aiMappingsPath);
     if schemaRenameResult is error {
         return error("Schema-name improvement failed", schemaRenameResult);
     } else {

@@ -85,8 +85,13 @@ public function isRetryableError(error err) returns boolean {
                             message.includes("unavailable") ||
                             message.includes("overloaded");
 
-    // Malformed LLM JSON output is worth one more attempt.
-    boolean isLLMResponseError = message.includes("unrecognized token");
+    // Malformed or structurally invalid LLM output is worth another attempt.
+    // The AI generators wrap parser errors with a stable prefix, so checking
+    // only the parser's original message would incorrectly fast-fail.
+    boolean isLLMResponseError = message.includes("unrecognized token") ||
+                            message.includes("failed to extract") ||
+                            message.includes("failed to parse") ||
+                            message.includes("invalid batch rename response format");
 
     return isNetworkError || isRateLimitError || isServerError || isTemporaryError || isLLMResponseError;
 }

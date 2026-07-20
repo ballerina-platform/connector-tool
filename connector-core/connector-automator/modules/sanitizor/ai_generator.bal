@@ -272,9 +272,16 @@ REQUIRED RESPONSE FORMAT (JSON):
         return error("Failed to generate batch schema names", response);
     }
 
-    json|error jsonResult = response.fromJsonString();
+    string|error jsonContent = utils:extractJsonFromLLMResponse(response);
+    if jsonContent is error {
+        return error("Failed to extract batch schema-name response JSON: " +
+            truncateAiResponseForError(response), jsonContent);
+    }
+
+    json|error jsonResult = jsonContent.fromJsonString();
     if jsonResult is error {
-        return error("Failed to parse batch rename response JSON", jsonResult);
+        return error("Failed to parse batch schema-name response JSON: " +
+            truncateAiResponseForError(response), jsonResult);
     }
 
     if jsonResult is map<json> && jsonResult.hasKey("renames") {
@@ -294,4 +301,13 @@ REQUIRED RESPONSE FORMAT (JSON):
         }
     }
     return error("Invalid batch rename response format");
+}
+
+function truncateAiResponseForError(string response) returns string {
+    string normalized = response.trim();
+    int previewLimit = 500;
+    if normalized.length() > previewLimit {
+        normalized = normalized.substring(0, previewLimit) + "...";
+    }
+    return string `response preview: ${normalized}`;
 }

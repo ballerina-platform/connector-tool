@@ -343,17 +343,20 @@ bal run -- openapi sanitize <spec> <output-dir> [options]
 **Output:**
 - `<output-dir>/docs/spec/flattened_openapi.json`
 - `<output-dir>/docs/spec/aligned_ballerina_openapi.json`
-- `<output-dir>/docs/spec/schema_names.json`
+- `<output-dir>/docs/spec/ai-mappings.json`
 - `<output-dir>/docs/spec/sanitations.md`
 
-`schema_names.json` stores each current aligned schema name and its stable AI-reviewed name as a direct mapping.
+`ai-mappings.json` stores stable AI-reviewed naming decisions. Currently, its `schemaNames` section maps each
+current aligned schema name directly to its reviewed name.
 Mappings for schemas removed from the current vendor spec are dropped. Identity mappings record names that were
 reviewed and intentionally kept unchanged:
 
 ```json
 {
-  "InlineResponse200": "UserListResponse",
-  "User": "User"
+  "schemaNames": {
+    "InlineResponse200": "UserListResponse",
+    "User": "User"
+  }
 }
 ```
 
@@ -454,7 +457,7 @@ bal run -- openapi generate-docs generate-all ./my-connector yes
 │   └── spec/
 │       ├── flattened_openapi.json
 │       ├── aligned_ballerina_openapi.json
-│       ├── schema_names.json
+│       ├── ai-mappings.json
 │       └── sanitations.md
 ├── ballerina/
 │   ├── Ballerina.toml
