@@ -15,6 +15,7 @@
 
 import wso2/connector_automator.utils;
 
+import ballerina/data.jsondata;
 import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
@@ -95,6 +96,58 @@ function fileExists(string filePath) returns boolean {
     return exists is boolean ? exists : false;
 }
 
+function writeJsonAtomically(string targetPath, json content, string description) returns error? {
+    string|error prettyResult = jsondata:prettify(content);
+    if prettyResult is error {
+        return error(string `Failed to prettify ${description}`, prettyResult);
+    }
+    string temporaryPath = targetPath + ".tmp";
+    error? writeResult = io:fileWriteString(temporaryPath, prettyResult);
+    if writeResult is error {
+        return error(string `Failed to write temporary ${description}`, writeResult);
+    }
+
+    string backupPath = targetPath + ".bak";
+    boolean|file:Error targetExists = file:test(targetPath, file:EXISTS);
+    if targetExists is file:Error {
+        check file:remove(temporaryPath);
+        return error(string `Failed to check existing ${description}`, targetExists);
+    }
+    if targetExists {
+        boolean|file:Error backupExists = file:test(backupPath, file:EXISTS);
+        if backupExists is file:Error {
+            check file:remove(temporaryPath);
+            return error(string `Failed to check ${description} backup`, backupExists);
+        }
+        if backupExists {
+            check file:remove(backupPath);
+        }
+        error? backupResult = file:rename(targetPath, backupPath);
+        if backupResult is error {
+            check file:remove(temporaryPath);
+            return error(string `Failed to back up existing ${description}`, backupResult);
+        }
+    }
+
+    error? renameResult = file:rename(temporaryPath, targetPath);
+    if renameResult is error {
+        do {
+            check file:remove(temporaryPath);
+        } on fail {
+        }
+        if targetExists {
+            do {
+                check file:rename(backupPath, targetPath);
+            } on fail {
+            }
+        }
+        return error(string `Failed to publish ${description}`, renameResult);
+    }
+    if targetExists {
+        check file:remove(backupPath);
+    }
+}
+
 function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
     string yamlAlignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.yaml";
     string jsonAlignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";
@@ -128,12 +181,13 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
         );
 
         if utils:isCommandSuccessfull(yqResult) && yqResult.stdout.length() > 0 {
-            io:Error? writeResult = io:fileWriteString(jsonAlignedSpec, yqResult.stdout);
-            if writeResult is io:Error {
-                return error("Failed to write JSON aligned spec file: " + writeResult.message());
+            json|error yqJson = yqResult.stdout.fromJsonString();
+            if yqJson is json {
+                check writeJsonAtomically(jsonAlignedSpec, yqJson, "JSON aligned spec file");
+                utils:logVerbose("converted YAML to JSON via yq");
+                return;
             }
-            utils:logVerbose("converted YAML to JSON via yq");
-            return;
+            utils:logVerbose("yq produced invalid JSON, trying Python fallback");
         }
 
         utils:CommandResult pythonResult = utils:executeCommand(
@@ -142,22 +196,19 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
         );
 
         if utils:isCommandSuccessfull(pythonResult) && pythonResult.stdout.length() > 0 {
-            io:Error? writeResult = io:fileWriteString(jsonAlignedSpec, pythonResult.stdout);
-            if writeResult is io:Error {
-                return error("Failed to write JSON aligned spec file: " + writeResult.message());
+            json|error pythonJson = pythonResult.stdout.fromJsonString();
+            if pythonJson is json {
+                check writeJsonAtomically(jsonAlignedSpec, pythonJson, "JSON aligned spec file");
+                utils:logVerbose("converted YAML to JSON via Python");
+                return;
             }
-            utils:logVerbose("converted YAML to JSON via Python");
-            return;
         }
 
         return error("Failed to parse YAML content: " + jsonData.message() +
             ". Fallback tools (yq, python) also failed or not available.");
     }
 
-    io:Error? writeResult = io:fileWriteJson(jsonAlignedSpec, jsonData);
-    if writeResult is io:Error {
-        return error("Failed to write JSON aligned spec file: " + writeResult.message());
-    }
+    check writeJsonAtomically(jsonAlignedSpec, jsonData, "JSON aligned spec file");
 
     utils:logVerbose("✓ converted YAML aligned spec to JSON");
     return;

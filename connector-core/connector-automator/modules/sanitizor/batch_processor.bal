@@ -15,7 +15,6 @@
 
 import wso2/connector_automator.utils;
 
-import ballerina/data.jsondata;
 import ballerina/io;
 import ballerina/lang.runtime;
 
@@ -236,15 +235,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
         }
     }
 
-    string|error prettifiedResult = jsondata:prettify(specJson);
-    if prettifiedResult is error {
-        return error("Failed to prettify JSON", prettifiedResult);
-    }
-
-    error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
-    if writeResult is error {
-        return error("Failed to write updated OpenAPI spec", writeResult);
-    }
+    check writeJsonAtomically(specFilePath, specJson, "updated OpenAPI spec");
 
     return {descriptionsAdded: descriptionsAdded, summariesAdded: 0};
 }
@@ -319,15 +310,7 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
         }
     }
 
-    string|error prettifiedResult = jsondata:prettify(specJson);
-    if prettifiedResult is error {
-        return error("Failed to prettify JSON", prettifiedResult);
-    }
-
-    error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
-    if writeResult is error {
-        return error("Failed to write updated OpenAPI spec", writeResult);
-    }
+    check writeJsonAtomically(specFilePath, specJson, "updated OpenAPI spec");
 
     return summariesImproved;
 }
@@ -478,15 +461,7 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, R
 
         map<json> updatedSpecResult = updateSchemaReferences(specMap, nameMapping);
 
-        string|error prettifiedResult = jsondata:prettify(updatedSpecResult);
-        if prettifiedResult is error {
-            return error("Failed to prettify JSON", prettifiedResult);
-        }
-
-        error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
-        if writeResult is error {
-            return error("Failed to write updated OpenAPI spec", writeResult);
-        }
+        check writeJsonAtomically(specFilePath, updatedSpecResult, "updated OpenAPI spec");
     }
 
     return renamedCount;
@@ -640,14 +615,7 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<s
         }
     }
 
-    string|error prettifiedResult = jsondata:prettify(specJson);
-    if prettifiedResult is error {
-        return error("Failed to prettify JSON", prettifiedResult);
-    }
-    error? writeResult = io:fileWriteString(specFilePath, prettifiedResult);
-    if writeResult is error {
-        return error("Failed to write updated OpenAPI spec", writeResult);
-    }
+    check writeJsonAtomically(specFilePath, specJson, "updated OpenAPI spec");
 
     return aiImproved;
 }

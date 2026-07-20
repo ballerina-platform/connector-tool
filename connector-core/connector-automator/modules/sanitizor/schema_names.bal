@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/data.jsondata;
 import ballerina/file;
 import ballerina/io;
 import ballerina/lang.array;
@@ -235,56 +234,4 @@ function writeAiMappings(string aiMappingsFilePath, map<json> aiMappings, map<js
     }
     aiMappings["schemaNames"] = sortedMappings;
     check writeJsonAtomically(aiMappingsFilePath, aiMappings, "AI mappings file");
-}
-
-function writeJsonAtomically(string targetPath, json content, string description) returns error? {
-    string|error prettyResult = jsondata:prettify(content);
-    if prettyResult is error {
-        return error(string `Failed to prettify ${description}`, prettyResult);
-    }
-    string temporaryPath = targetPath + ".tmp";
-    error? writeResult = io:fileWriteString(temporaryPath, prettyResult);
-    if writeResult is error {
-        return error(string `Failed to write temporary ${description}`, writeResult);
-    }
-
-    string backupPath = targetPath + ".bak";
-    boolean|file:Error targetExists = file:test(targetPath, file:EXISTS);
-    if targetExists is file:Error {
-        check file:remove(temporaryPath);
-        return error(string `Failed to check existing ${description}`, targetExists);
-    }
-    if targetExists {
-        boolean|file:Error backupExists = file:test(backupPath, file:EXISTS);
-        if backupExists is file:Error {
-            check file:remove(temporaryPath);
-            return error(string `Failed to check ${description} backup`, backupExists);
-        }
-        if backupExists {
-            check file:remove(backupPath);
-        }
-        error? backupResult = file:rename(targetPath, backupPath);
-        if backupResult is error {
-            check file:remove(temporaryPath);
-            return error(string `Failed to back up existing ${description}`, backupResult);
-        }
-    }
-
-    error? renameResult = file:rename(temporaryPath, targetPath);
-    if renameResult is error {
-        do {
-            check file:remove(temporaryPath);
-        } on fail {
-        }
-        if targetExists {
-            do {
-                check file:rename(backupPath, targetPath);
-            } on fail {
-            }
-        }
-        return error(string `Failed to publish ${description}`, renameResult);
-    }
-    if targetExists {
-        check file:remove(backupPath);
-    }
 }
