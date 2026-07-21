@@ -24,8 +24,8 @@ connector-cli/build/
 connector-core/.gradle/
 connector-core/build/
 
-# Local findings and investigation notes
-docs/finding/
+# Local documentation and investigation notes
+/docs/
 
 # Local agent instructions, not shared via git
 CLAUDE.md
