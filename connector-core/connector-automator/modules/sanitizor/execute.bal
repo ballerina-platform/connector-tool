@@ -130,7 +130,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
     SchemaNameImprovementResult|error schemaRenameResult = improveSchemaNamesBatchWithRetry(
         alignedSpec, aiMappingsPath);
     if schemaRenameResult is error {
-        utils:logWarn(string `schema-name improvement failed: ${schemaRenameResult.message()}`);
+        return error("Schema-name improvement failed", schemaRenameResult);
     } else {
         utils:logInfo("     schema names improved");
     }
