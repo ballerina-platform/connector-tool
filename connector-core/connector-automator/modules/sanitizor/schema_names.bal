@@ -218,20 +218,16 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
             mappingsToPersist[originalName] = improvedName;
         }
     }
-    check writeAiMappings(aiMappingsFilePath, aiMappingsDocument, mappingsToPersist);
-    check writeJsonAtomically(specFilePath, updatedSpec, "OpenAPI spec");
-    return {mappingsReused: reused, schemasReviewed: reviewed, schemasRenamed: renamed};
-}
-
-function writeAiMappings(string aiMappingsFilePath, map<json> aiMappings, map<json> schemaNameMappings) returns error? {
-    string[] names = schemaNameMappings.keys().sort(array:ASCENDING);
+    string[] mappingNames = mappingsToPersist.keys().sort(array:ASCENDING);
     map<json> sortedMappings = {};
-    foreach string name in names {
-        json? improvedName = schemaNameMappings[name];
+    foreach string name in mappingNames {
+        json? improvedName = mappingsToPersist[name];
         if improvedName is string {
             sortedMappings[name] = improvedName;
         }
     }
-    aiMappings["schemaNames"] = sortedMappings;
-    check writeJsonAtomically(aiMappingsFilePath, aiMappings, "AI mappings file");
+    aiMappingsDocument["schemaNames"] = sortedMappings;
+    check writeJsonAtomically(aiMappingsFilePath, aiMappingsDocument);
+    check writeJsonAtomically(specFilePath, updatedSpec);
+    return {mappingsReused: reused, schemasReviewed: reviewed, schemasRenamed: renamed};
 }

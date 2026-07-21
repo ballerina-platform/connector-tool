@@ -176,7 +176,7 @@ public function applySanitations(
 
         json|error modifiedSpec = applySanitationsViaLLM(sanitationsContent, specStr);
         if modifiedSpec is json {
-            check writeJsonAtomically(newSpecPath, modifiedSpec, "sanitized OpenAPI spec");
+            check writeJsonAtomically(newSpecPath, modifiedSpec);
             utils:logInfo("✓ sanitations applied (AI-powered)");
             return;
         }
@@ -1027,7 +1027,7 @@ function applyRulesToSpec(string specPath, SanitationRules rules) returns error?
         applyTypeChange(spec, tc);
     }
 
-    check writeJsonAtomically(specPath, spec, "sanitized OpenAPI spec");
+    check writeJsonAtomically(specPath, spec);
 }
 
 function applyServerUrlChange(map<json> spec, ServerUrlChange sc) {

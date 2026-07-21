@@ -235,7 +235,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
         }
     }
 
-    check writeJsonAtomically(specFilePath, specJson, "updated OpenAPI spec");
+    check writeJsonAtomically(specFilePath, specJson);
 
     return {descriptionsAdded: descriptionsAdded, summariesAdded: 0};
 }
@@ -310,161 +310,9 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
         }
     }
 
-    check writeJsonAtomically(specFilePath, specJson, "updated OpenAPI spec");
+    check writeJsonAtomically(specFilePath, specJson);
 
     return summariesImproved;
-}
-
-public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns int|error {
-    utils:logVerbose(string `processing spec to rename InlineResponse schemas: ${specFilePath}`);
-
-    json|error specResult = io:fileReadJson(specFilePath);
-    if specResult is error {
-        return error("Failed to read OpenAPI spec file", specResult);
-    }
-
-    json specJson = specResult;
-
-    if !(specJson is map<json>) {
-        return error("spec is not a valid JSON object");
-    }
-
-    map<json> specMap = <map<json>>specJson;
-
-    json|error componentsResult = specMap.get("components");
-    if !(componentsResult is map<json>) {
-        return error("No components section found in OpenAPI spec");
-    }
-
-    map<json> componentsMap = <map<json>>componentsResult;
-    json|error schemasResult = componentsMap.get("schemas");
-    if !(schemasResult is map<json>) {
-        return error("No schemas section found in components");
-    }
-
-    map<json> schemasMap = <map<json>>schemasResult;
-
-    string[] allExistingNames = [];
-    foreach string schemaName in schemasMap.keys() {
-        if (!schemaName.startsWith("InlineResponse")) {
-            allExistingNames.push(schemaName);
-        }
-    }
-
-    SchemaRenameRequest[] renameRequests = [];
-    string apiContext = extractApiContext(specMap);
-
-    foreach string schemaName in schemasMap.keys() {
-        if (schemaName.startsWith("InlineResponse") || schemaName.endsWith("AllOf2") || schemaName.endsWith("OneOf2")) {
-            json|error schemaResult = schemasMap.get(schemaName);
-            if (schemaResult is map<json>) {
-                string schemaDefinition = (<map<json>>schemaResult).toJsonString();
-                string usageContext = extractSchemaUsageContext(schemaName, specMap);
-
-                renameRequests.push({
-                    originalName: schemaName,
-                    schemaDefinition: schemaDefinition,
-                    usageContext: usageContext
-                });
-            }
-        }
-    }
-
-    if renameRequests.length() == 0 {
-        utils:logVerbose("no InlineResponse schemas found to rename");
-        return 0;
-    }
-
-    map<string> nameMapping = {};
-    int renamedCount = 0;
-    int totalRequests = renameRequests.length();
-    utils:logVerbose(string `collected ${totalRequests} schema rename requests`);
-
-    int startIdx = 0;
-    while startIdx < totalRequests {
-        int endIdx = startIdx + BATCH_SIZE;
-        if endIdx > totalRequests {
-            endIdx = totalRequests;
-        }
-
-        SchemaRenameRequest[] batch = renameRequests.slice(startIdx, endIdx);
-        int batchNum = (startIdx / BATCH_SIZE) + 1;
-        utils:logVerbose(string `processing schema rename batch ${batchNum} (${batch.length()} schemas)`);
-
-        BatchRenameResponse[]|error batchResult = generateSchemaNamesBatchWithRetry(batch, apiContext, allExistingNames, config);
-        if batchResult is BatchRenameResponse[] {
-            utils:logVerbose(string `schema rename batch ${batchNum} complete (${batchResult.length()} schemas)`);
-
-            foreach BatchRenameResponse response in batchResult {
-                string newName = response.newName;
-
-                if (isValidSchemaName(newName)) {
-                    if (!isNameTaken(newName, allExistingNames, nameMapping)) {
-                        allExistingNames.push(newName);
-                        nameMapping[response.originalName] = newName;
-                        renamedCount += 1;
-                    } else {
-                        utils:logWarn(string `duplicate schema name generated for '${response.originalName}': '${newName}', using fallback`);
-                        string fallbackName = newName + "Alt";
-                        int counter = 1;
-                        while (isNameTaken(fallbackName, allExistingNames, nameMapping)) {
-                            fallbackName = newName + "Alt" + counter.toString();
-                            counter += 1;
-                        }
-                        allExistingNames.push(fallbackName);
-                        nameMapping[response.originalName] = fallbackName;
-                        renamedCount += 1;
-                    }
-                } else {
-                    utils:logWarn(string `invalid schema name generated for '${response.originalName}': '${newName}', using fallback`);
-                    string suffix = response.originalName;
-                    if response.originalName.startsWith("InlineResponse") && response.originalName.length() > 14 {
-                        suffix = response.originalName.substring(14);
-                    }
-                    string fallbackBaseName = "Schema" + suffix;
-                    string fallbackName = fallbackBaseName;
-                    int counter = 1;
-                    while (isNameTaken(fallbackName, allExistingNames, nameMapping)) {
-                        fallbackName = fallbackBaseName + counter.toString();
-                        counter += 1;
-                    }
-                    allExistingNames.push(fallbackName);
-                    nameMapping[response.originalName] = fallbackName;
-                    renamedCount += 1;
-                }
-            }
-        } else {
-            utils:logError(string `schema rename batch ${batchNum} failed after all retries: ${batchResult.message()}`);
-        }
-
-        startIdx += BATCH_SIZE;
-    }
-
-    if (nameMapping.length() > 0) {
-        map<json> newSchemas = {};
-        foreach string oldName in schemasMap.keys() {
-            json|error schemaValueResult = schemasMap.get(oldName);
-            if (schemaValueResult is json) {
-                if (nameMapping.hasKey(oldName)) {
-                    string? newNameResult = nameMapping[oldName];
-                    if (newNameResult is string) {
-                        newSchemas[newNameResult] = schemaValueResult;
-                    }
-                } else {
-                    newSchemas[oldName] = schemaValueResult;
-                }
-            }
-        }
-
-        componentsMap["schemas"] = newSchemas;
-        specMap["components"] = componentsMap;
-
-        map<json> updatedSpecResult = updateSchemaReferences(specMap, nameMapping);
-
-        check writeJsonAtomically(specFilePath, updatedSpecResult, "updated OpenAPI spec");
-    }
-
-    return renamedCount;
 }
 
 public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<string>>? priorOperationIds) returns int|error {
@@ -615,7 +463,7 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<s
         }
     }
 
-    check writeJsonAtomically(specFilePath, specJson, "updated OpenAPI spec");
+    check writeJsonAtomically(specFilePath, specJson);
 
     return aiImproved;
 }

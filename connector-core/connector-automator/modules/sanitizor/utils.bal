@@ -57,26 +57,6 @@ function isValidSchemaName(string name) returns boolean {
     return regexp:isFullMatch(re `[A-Z][a-zA-Z0-9]*`, name);
 }
 
-// Helper function to check if a name is already taken
-function isNameTaken(string name, string[] existingNames, map<string> nameMapping) returns boolean {
-    // Check against existing schema names
-    foreach string existingName in existingNames {
-        if (existingName == name) {
-            return true;
-        }
-    }
-
-    // Check against already mapped names
-    foreach string key in nameMapping.keys() {
-        string? mappedName = nameMapping[key];
-        if (mappedName is string && mappedName == name) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 // Helper function to generate unique request IDs for operationId requests
 function generateOperationRequestId(string path, string method) returns string {
     string cleanPath = regexp:replaceAll(re `_`, path, "_u");
@@ -96,36 +76,45 @@ function fileExists(string filePath) returns boolean {
     return exists is boolean ? exists : false;
 }
 
-function writeJsonAtomically(string targetPath, json content, string description) returns error? {
+function writeJsonAtomically(string targetPath, json content) returns error? {
     string|error prettyResult = jsondata:prettify(content);
     if prettyResult is error {
-        return error(string `Failed to prettify ${description}`, prettyResult);
+        return prettyResult;
     }
     string temporaryPath = targetPath + ".tmp";
     error? writeResult = io:fileWriteString(temporaryPath, prettyResult);
     if writeResult is error {
-        return error(string `Failed to write temporary ${description}`, writeResult);
+        return writeResult;
     }
 
     string backupPath = targetPath + ".bak";
     boolean|file:Error targetExists = file:test(targetPath, file:EXISTS);
     if targetExists is file:Error {
-        check file:remove(temporaryPath);
-        return error(string `Failed to check existing ${description}`, targetExists);
+        do {
+            check file:remove(temporaryPath);
+        } on fail {
+        }
+        return targetExists;
     }
     if targetExists {
         boolean|file:Error backupExists = file:test(backupPath, file:EXISTS);
         if backupExists is file:Error {
-            check file:remove(temporaryPath);
-            return error(string `Failed to check ${description} backup`, backupExists);
+            do {
+                check file:remove(temporaryPath);
+            } on fail {
+            }
+            return backupExists;
         }
         if backupExists {
             check file:remove(backupPath);
         }
         error? backupResult = file:rename(targetPath, backupPath);
         if backupResult is error {
-            check file:remove(temporaryPath);
-            return error(string `Failed to back up existing ${description}`, backupResult);
+            do {
+                check file:remove(temporaryPath);
+            } on fail {
+            }
+            return backupResult;
         }
     }
 
@@ -141,7 +130,7 @@ function writeJsonAtomically(string targetPath, json content, string description
             } on fail {
             }
         }
-        return error(string `Failed to publish ${description}`, renameResult);
+        return renameResult;
     }
     if targetExists {
         check file:remove(backupPath);
@@ -183,7 +172,7 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
         if utils:isCommandSuccessfull(yqResult) && yqResult.stdout.length() > 0 {
             json|error yqJson = yqResult.stdout.fromJsonString();
             if yqJson is json {
-                check writeJsonAtomically(jsonAlignedSpec, yqJson, "JSON aligned spec file");
+                check writeJsonAtomically(jsonAlignedSpec, yqJson);
                 utils:logVerbose("converted YAML to JSON via yq");
                 return;
             }
@@ -198,7 +187,7 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
         if utils:isCommandSuccessfull(pythonResult) && pythonResult.stdout.length() > 0 {
             json|error pythonJson = pythonResult.stdout.fromJsonString();
             if pythonJson is json {
-                check writeJsonAtomically(jsonAlignedSpec, pythonJson, "JSON aligned spec file");
+                check writeJsonAtomically(jsonAlignedSpec, pythonJson);
                 utils:logVerbose("converted YAML to JSON via Python");
                 return;
             }
@@ -208,7 +197,7 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
             ". Fallback tools (yq, python) also failed or not available.");
     }
 
-    check writeJsonAtomically(jsonAlignedSpec, jsonData, "JSON aligned spec file");
+    check writeJsonAtomically(jsonAlignedSpec, jsonData);
 
     utils:logVerbose("✓ converted YAML aligned spec to JSON");
     return;
