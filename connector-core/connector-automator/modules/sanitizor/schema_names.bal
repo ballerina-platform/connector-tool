@@ -104,12 +104,6 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
             if !isValidSchemaName(improvedName) {
                 return error(string `Invalid schema mapping: '${schemaName}' -> '${improvedName}'`);
             }
-            if improvedName != schemaName && schemas.hasKey(improvedName) {
-                return error(string `Cannot apply schema mapping '${schemaName}' -> '${improvedName}': both names exist in the aligned spec`);
-            }
-            if reusedNames.indexOf(improvedName) is int {
-                return error(string `Invalid AI schema-name mappings: duplicate improved name '${improvedName}'`);
-            }
             reusedMappings[schemaName] = improvedName;
             reusedNames.push(improvedName);
             reused += 1;
@@ -185,6 +179,17 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
         if improvedName is string {
             currentMappings[originalName] = improvedName;
         }
+    }
+
+    // Validate the complete target namespace after all schema-name decisions are merged.
+    map<string> targetOwners = {};
+    foreach string schemaName in schemas.keys() {
+        string targetName = currentMappings[schemaName] ?: schemaName;
+        string? existingOwner = targetOwners[targetName];
+        if existingOwner is string {
+            return error(string `Invalid AI schema-name mappings: '${existingOwner}' and '${schemaName}' both map to '${targetName}'`);
+        }
+        targetOwners[targetName] = schemaName;
     }
 
     // Update the spec with current mapping.

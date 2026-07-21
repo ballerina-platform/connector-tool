@@ -133,7 +133,10 @@ function writeJsonAtomically(string targetPath, json content) returns error? {
         return renameResult;
     }
     if targetExists {
-        check file:remove(backupPath);
+        do {
+            check file:remove(backupPath);
+        } on fail {
+        }
     }
 }
 
