@@ -11,8 +11,7 @@ SYNOPSIS
 DESCRIPTION
        Run AI-assisted stages to sanitize an OpenAPI specification, generate
        a Ballerina client, fix compilation errors, generate tests and
-       examples, and produce README documentation. Client generation also
-       summarizes API changes and recommends a semantic version update.
+       examples, and produce README documentation.
 
        All five stages run by default in the following order:
        sanitize → client → tests → examples → docs.
@@ -40,7 +39,6 @@ STAGES
        tests
             Generate connector tests, including a mock server module and a
             test suite derived from the connector and source specification.
-            Run bal test and attempt AI-assisted repairs when it fails.
 
        examples
             Generate AI-assisted Ballerina usage examples for the connector.
