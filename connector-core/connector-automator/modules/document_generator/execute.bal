@@ -44,16 +44,16 @@ public function formatConnectorDisplayName(string connectorName) returns string 
 
 public function executeDocumentGeneration(string connectorPath, string[] excluded = []) returns error? {
 
+    if excluded.indexOf("examples") is () {
+        check generateIndividualExampleReadmes(connectorPath);
+        check generateExamplesReadme(connectorPath);
+    }
     if excluded.indexOf("client") is () {
         check generateMainReadme(connectorPath);
         check generateBallerinaReadme(connectorPath);
     }
     if excluded.indexOf("tests") is () {
         check generateTestsReadme(connectorPath);
-    }
-    if excluded.indexOf("examples") is () {
-        check generateExamplesReadme(connectorPath);
-        check generateIndividualExampleReadmes(connectorPath);
     }
     if excluded.indexOf("metadata") is () {
         check generateKeywords(connectorPath);
@@ -97,16 +97,16 @@ public function executeDocGen(string command, string connectorPath, string[] exc
 function generateAllReadmes(string connectorPath, string[] excluded) returns error? {
     utils:logVerbose("generating documentation files");
 
+    if excluded.indexOf("examples") is () {
+        check generateIndividualExampleReadmes(connectorPath);
+        check generateExamplesReadme(connectorPath);
+    }
     if excluded.indexOf("client") is () {
         check generateMainReadme(connectorPath);
         check generateBallerinaReadme(connectorPath);
     }
     if excluded.indexOf("tests") is () {
         check generateTestsReadme(connectorPath);
-    }
-    if excluded.indexOf("examples") is () {
-        check generateExamplesReadme(connectorPath);
-        check generateIndividualExampleReadmes(connectorPath);
     }
     if excluded.indexOf("metadata") is () {
         check generateKeywords(connectorPath);
@@ -148,7 +148,7 @@ function genIndividualExampleReadmes(string connectorPath) returns error? {
         utils:logError(string `README generation failed: ${result.message()}`);
         return result;
     }
-    utils:logInfo(string `✓ READMEs: ${connectorPath}/examples/*/README.md`);
+    utils:logInfo(string `✓ example docs: ${connectorPath}/examples/*/*.md`);
 }
 
 function genMainReadme(string connectorPath) returns error? {
@@ -175,11 +175,11 @@ function printUsage() {
     io:fprintln(io:stderr, "  bal connector openapi generate-docs generate-all <connector-path> [-q|-v]");
     io:fprintln(io:stderr, "");
     io:fprintln(io:stderr, "COMMANDS");
-    io:fprintln(io:stderr, "  generate-all                 Generate all READMEs");
+    io:fprintln(io:stderr, "  generate-all                 Generate all documentation");
     io:fprintln(io:stderr, "  generate-ballerina           Generate module README");
     io:fprintln(io:stderr, "  generate-tests               Generate tests README");
     io:fprintln(io:stderr, "  generate-examples            Generate examples README");
-    io:fprintln(io:stderr, "  generate-individual-examples Generate example READMEs");
+    io:fprintln(io:stderr, "  generate-individual-examples Generate individual example documentation");
     io:fprintln(io:stderr, "  generate-main                Generate root README");
     io:fprintln(io:stderr, "  generate-metadata            Generate Ballerina.toml marketplace and display-name keywords");
     io:fprintln(io:stderr, "");
