@@ -273,45 +273,49 @@ function updateOperationIdInSpec(map<json> paths, string path, string method, st
     return error("Could not find operation at: " + method + " " + path);
 }
 
-// Helper function to update schema references throughout the JSON structure
-function updateSchemaReferences(json jsonData, map<string> nameMapping) returns json {
-    if (jsonData is map<json>) {
-        map<json> resultMap = {};
+// Helper function to update schema references throughout a JSON object.
+function updateSchemaReferences(map<json> jsonData, map<string> nameMapping) returns map<json> {
+    map<json> resultMap = {};
 
-        foreach string key in jsonData.keys() {
-            json|error value = jsonData.get(key);
-            if (value is json) {
-                if (key == "$ref" && value is string) {
-                    string refValue = <string>value;
-                    if (refValue.startsWith("#/components/schemas/")) {
-                        string schemaName = refValue.substring(21);
-                        string? newName = nameMapping[schemaName];
-                        if (newName is string) {
-                            string newRef = "#/components/schemas/" + newName;
-                            resultMap[key] = newRef;
-                            utils:logVerbose(string `updated schema ref: ${refValue} → ${newRef}`);
-                        } else {
-                            resultMap[key] = value;
-                        }
+    foreach string key in jsonData.keys() {
+        json|error value = jsonData.get(key);
+        if value is json {
+            if key == "$ref" && value is string {
+                string refValue = value;
+                if refValue.startsWith("#/components/schemas/") {
+                    string schemaName = refValue.substring(21);
+                    string? newName = nameMapping[schemaName];
+                    if newName is string {
+                        string newRef = "#/components/schemas/" + newName;
+                        resultMap[key] = newRef;
+                        utils:logVerbose(string `updated schema ref: ${refValue} → ${newRef}`);
                     } else {
                         resultMap[key] = value;
                     }
                 } else {
-                    resultMap[key] = updateSchemaReferences(value, nameMapping);
+                    resultMap[key] = value;
                 }
+            } else {
+                resultMap[key] = updateSchemaReferencesInValue(value, nameMapping);
             }
         }
+    }
 
-        return resultMap;
-    } else if (jsonData is json[]) {
+    return resultMap;
+}
+
+// Nested JSON values may be objects, arrays, or primitives.
+function updateSchemaReferencesInValue(json jsonData, map<string> nameMapping) returns json {
+    if jsonData is map<json> {
+        return updateSchemaReferences(jsonData, nameMapping);
+    } else if jsonData is json[] {
         json[] resultArray = [];
         foreach json item in jsonData {
-            resultArray.push(updateSchemaReferences(item, nameMapping));
+            resultArray.push(updateSchemaReferencesInValue(item, nameMapping));
         }
         return resultArray;
-    } else {
-        return jsonData;
     }
+    return jsonData;
 }
 
 // Helper function to update response description in spec

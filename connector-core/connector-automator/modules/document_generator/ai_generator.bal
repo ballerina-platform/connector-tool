@@ -276,12 +276,16 @@ function createTemplateData(ConnectorMetadata metadata) returns TemplateData {
 public function generateKeywords(string connectorPath) returns error? {
 
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
-    ai:Prompt prompt = createKeywordGenerationPrompt(metadata);
+    string displayName = formatConnectorDisplayName(metadata.connectorName);
+    if displayName.length() == 0 {
+        return error("Ballerina.toml [package].name is required to generate the Name keyword");
+    }
 
+    ai:Prompt prompt = createKeywordGenerationPrompt(metadata);
     ai:ModelProvider model = check utils:getAIModel();
     ConnectorKeywords kw = check model->generate(prompt);
 
-    string[] keywords = [kw.cost, kw.vendor, kw.area, "Type/Connector"];
+    string[] keywords = [displayName, kw.cost, kw.vendor, kw.area, "Type/Connector"];
     check writeKeywordsToToml(connectorPath, keywords);
 
     utils:logInfo(string `✓ keywords written: ${keywords.toString()}`);

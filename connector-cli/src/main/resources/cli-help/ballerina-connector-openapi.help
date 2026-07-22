@@ -55,7 +55,7 @@ OPTIONS
             workspace. Defaults to the current working directory.
 
        --spec-dir=<path>
-            Directory where the aligned specification and sanitations.md
+            Directory where the aligned specification, ai-mappings.json, and sanitations.md
             are written. Content is placed inside a docs/spec subdirectory.
             Defaults to <output-dir>/docs/spec.
 

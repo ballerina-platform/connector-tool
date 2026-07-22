@@ -90,8 +90,17 @@ function analyzeBallerinaToml(string connectorPath, ConnectorMetadata metadata) 
         string content = check io:fileReadString(ballerinaTomlPath);
 
         string[] lines = regexp:split(re `\n`, content);
+        boolean inPackage = false;
         foreach string line in lines {
             string trimmedLine = strings:trim(line);
+            if trimmedLine.startsWith("[") && !trimmedLine.startsWith("[[") {
+                inPackage = trimmedLine == "[package]";
+            }
+
+            if !inPackage {
+                continue;
+            }
+
             if strings:startsWith(trimmedLine, "name") {
                 string[] parts = regexp:split(re `=`, trimmedLine);
                 if parts.length() > 1 {
@@ -198,4 +207,3 @@ public function analyzeExampleDirectory(string examplePath, string exampleDirNam
 
     return exampleData;
 }
-

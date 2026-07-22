@@ -176,7 +176,7 @@ public function applySanitations(
 
         json|error modifiedSpec = applySanitationsViaLLM(sanitationsContent, specStr);
         if modifiedSpec is json {
-            check io:fileWriteString(newSpecPath, modifiedSpec.toJsonString());
+            check writeJsonAtomically(newSpecPath, modifiedSpec);
             utils:logInfo("✓ sanitations applied (AI-powered)");
             return;
         }
@@ -1027,8 +1027,7 @@ function applyRulesToSpec(string specPath, SanitationRules rules) returns error?
         applyTypeChange(spec, tc);
     }
 
-    string updatedContent = spec.toJsonString();
-    check io:fileWriteString(specPath, updatedContent);
+    check writeJsonAtomically(specPath, spec);
 }
 
 function applyServerUrlChange(map<json> spec, ServerUrlChange sc) {

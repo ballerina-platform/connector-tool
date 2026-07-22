@@ -16,6 +16,31 @@
 import wso2/connector_automator.utils;
 
 import ballerina/io;
+import ballerina/lang.regexp;
+import ballerina/lang.'string as strings;
+
+# Converts a Ballerina package name into the display name used by connector catalog metadata.
+#
+# + connectorName - Package name from the [package] section of Ballerina.toml
+# + return - Name keyword with a title-cased display name and normalized separators
+public function formatConnectorDisplayName(string connectorName) returns string {
+    string normalized = regexp:replaceAll(re `[._-]+`, connectorName, " ").trim();
+    string[] words = regexp:split(re `\s+`, normalized);
+    string[] titleCasedWords = [];
+
+    foreach string word in words {
+        if word.length() > 0 {
+            titleCasedWords.push(word.substring(0, 1).toUpperAscii() + word.substring(1).toLowerAscii());
+        }
+    }
+
+    string displayName = strings:'join(" ", ...titleCasedWords);
+    if displayName.length() == 0 {
+        return "";
+    }
+
+    return "Name/" + displayName;
+}
 
 public function executeDocumentGeneration(string connectorPath, string[] excluded = []) returns error? {
 
@@ -156,7 +181,7 @@ function printUsage() {
     io:fprintln(io:stderr, "  generate-examples            Generate examples README");
     io:fprintln(io:stderr, "  generate-individual-examples Generate example READMEs");
     io:fprintln(io:stderr, "  generate-main                Generate root README");
-    io:fprintln(io:stderr, "  generate-metadata            Generate Ballerina.toml keywords");
+    io:fprintln(io:stderr, "  generate-metadata            Generate Ballerina.toml marketplace and display-name keywords");
     io:fprintln(io:stderr, "");
     io:fprintln(io:stderr, "ENVIRONMENT");
     io:fprintln(io:stderr, "  ANTHROPIC_API_KEY    Required for AI-powered documentation");
