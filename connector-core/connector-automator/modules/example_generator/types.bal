@@ -25,3 +25,14 @@ public type ConnectorDetails record {|
     string typeNames;
 
 |};
+
+public type ExampleCleanupResult record {|
+    int removed;
+    string[] failures;
+|};
+
+public type ExampleRepairResult record {|
+    int total;
+    int repaired;
+    string[] failures;
+|};

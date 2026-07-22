@@ -40,7 +40,7 @@ bal connector openapi -i <spec-file> [-o <output-dir>] [options...]
 |--------|-------------|----------|
 | `-i`, `--input` | Path to the OpenAPI specification file | Yes |
 | `-o`, `--output` | Output directory for the connector workspace (default: current directory) | No |
-| `-x`, `--exclude` | Exclude a pipeline stage. Repeatable. Values: `sanitize`, `client`, `tests`, `examples`, `docs` | No |
+| `-x`, `--exclude` | Exclude a pipeline stage. Repeatable. Values: `sanitize`, `client`, `tests`, `examples`, `docs`, `summary` | No |
 | `-t`, `--tags` | Include only operations with this OpenAPI tag. Repeatable. | No |
 | `--operations` | Include only these operation IDs. Repeatable. | No |
 | `--remote` | Generate client methods as `remote` instead of resource methods | No |
@@ -62,6 +62,7 @@ The pipeline runs these stages in order. Any stage can be skipped with `-x <stag
 | `tests` | Generate mock service and AI-assisted connector tests |
 | `examples` | Generate AI-assisted usage examples |
 | `docs` | Generate README documentation |
+| `summary` | Analyze `client.bal` and `types.bal` changes and recommend a semantic version update |
 
 ---
 

@@ -11,10 +11,10 @@ SYNOPSIS
 DESCRIPTION
        Run AI-assisted stages to sanitize an OpenAPI specification, generate
        a Ballerina client, fix compilation errors, generate tests and
-       examples, and produce README documentation.
+       examples, produce README documentation, and summarize client changes.
 
-       All five stages run by default in the following order:
-       sanitize → client → tests → examples → docs.
+       All six stages run by default in the following order:
+       sanitize → client → tests → examples → docs → summary.
 
        Use -x/--exclude to skip individual stages and run only the stages
        you need.
@@ -38,6 +38,7 @@ STAGES
        tests
             Generate connector tests, including a mock server module and a
             test suite derived from the connector and source specification.
+            Run bal test and attempt AI-assisted repairs when it fails.
 
        examples
             Generate AI-assisted Ballerina usage examples for the connector.
@@ -45,6 +46,10 @@ STAGES
        docs
             Generate README documentation for the connector, its tests,
             and its examples.
+
+       summary
+            Analyze Git changes in client.bal and types.bal and recommend a
+            semantic version update.
 
 OPTIONS
        -i <path>, --input=<path>
@@ -75,7 +80,7 @@ OPTIONS
 
        -x <stage>, --exclude=<stage>
             Exclude a pipeline stage. Repeatable. Valid values: sanitize,
-            client, tests, examples, docs.
+            client, tests, examples, docs, summary.
 
        --remote
             Generate client APIs as remote methods instead of the default
@@ -101,12 +106,13 @@ EXAMPLES
 
        Run only the sanitize stage.
            $ bal connector openapi -i ./openapi.yaml -o ./out \
-                 -x client -x tests -x examples -x docs
+                 -x client -x tests -x examples -x docs -x summary
 
        Generate a client from an existing sanitized specification with a
        license header and tag filters.
            $ bal connector openapi -i ./openapi.yaml -o ./out \
                  -x sanitize -x tests -x examples -x docs \
+                 -x summary \
                  --license ./license.txt -t Accounts -t Payments
 
        Re-run the full pipeline on an existing connector directory (applies

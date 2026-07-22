@@ -846,6 +846,117 @@ function normalizeCodeResponse(string responseText) returns string {
     return string:'join("\n", ...bodyLines).trim();
 }
 
+function testFailureCandidates(string projectPath) returns string[]|error {
+    string[] candidates = [];
+    foreach string relativePath in ["tests/test.bal", "tests/mock_service.bal"] {
+        string fullPath = check file:joinPath(projectPath, relativePath);
+        if check file:test(fullPath, file:EXISTS) {
+            candidates.push(relativePath);
+        }
+    }
+    return candidates;
+}
+
+function selectTestFailureCandidates(string projectPath, string diagnostics) returns string[]|error {
+    string[] available = check testFailureCandidates(projectPath);
+    string normalizedDiagnostics = regexp:replaceAll(re `\\`, diagnostics.toLowerAscii(), "/");
+    string[] matched = available.filter(function(string candidate) returns boolean {
+        string fileName = candidate.substring((candidate.lastIndexOf("/") ?: -1) + 1);
+        return normalizedDiagnostics.includes(candidate.toLowerAscii()) ||
+            normalizedDiagnostics.includes(fileName.toLowerAscii());
+    });
+    if matched.length() > 0 {
+        return matched;
+    }
+    if available.indexOf("tests/test.bal") is int {
+        return ["tests/test.bal"];
+    }
+    return available;
+}
+
+public function fixBalTestFailures(string projectPath, int iterationLimit = maxIterations) returns TestFixResult|error {
+    if !utils:isAIServiceInitialized() {
+        check utils:initAIService();
+    }
+
+    utils:CommandResult testResult = utils:executeCommand("bal test", projectPath);
+    if testResult.success {
+        return {success: true, attempts: 0, stdout: testResult.stdout, stderr: testResult.stderr, modifiedFiles: []};
+    }
+    if (check testFailureCandidates(projectPath)).length() == 0 {
+        return {success: false, attempts: 0, stdout: testResult.stdout, stderr: testResult.stderr, modifiedFiles: []};
+    }
+
+    int attempts = 0;
+    string previousDiagnostics = "";
+    map<FixAttempt[]> history = {};
+    string[] modifiedFiles = [];
+
+    while attempts < iterationLimit {
+        string diagnostics = string `${testResult.stderr}\n${testResult.stdout}`;
+        if attempts > 0 && diagnostics == previousDiagnostics {
+            utils:logWarn("`bal test` diagnostics did not change — stopping test repair");
+            break;
+        }
+        previousDiagnostics = diagnostics;
+        attempts += 1;
+        boolean applied = false;
+        string[] candidates = check selectTestFailureCandidates(projectPath, diagnostics);
+
+        foreach string relativePath in candidates {
+            string fullPath = check file:joinPath(projectPath, relativePath);
+            string currentCode = check io:fileReadString(fullPath);
+            FixAttempt[] previousAttempts = history.hasKey(relativePath) ? history.get(relativePath) : [];
+            string prompt = createTestFailureFixPrompt(currentCode, relativePath, testResult.stderr, testResult.stdout,
+                    getTypeContextForFile(projectPath, relativePath), buildFixHistoryContext(previousAttempts));
+            string|error response = utils:callAI(prompt);
+            if response is error {
+                utils:logWarn(string `could not generate a test fix for ${relativePath}: ${response.message()}`);
+                continue;
+            }
+
+            string fixedCode = normalizeCodeResponse(response);
+            if fixedCode.length() == 0 || fixedCode == currentCode.trim() {
+                continue;
+            }
+            boolean|error applyResult = applyFix(projectPath, relativePath, fixedCode);
+            if applyResult is error || !applyResult {
+                continue;
+            }
+            applied = true;
+            if modifiedFiles.indexOf(relativePath) is () {
+                modifiedFiles.push(relativePath);
+            }
+            FixAttempt attempt = {
+                iteration: attempts,
+                errorMessages: [diagnostics],
+                appliedFix: string `Updated ${relativePath} for bal test failure`
+            };
+            if !history.hasKey(relativePath) {
+                history[relativePath] = [];
+            }
+            history.get(relativePath).push(attempt);
+        }
+
+        if !applied {
+            utils:logWarn("AI produced no applicable test changes — stopping test repair");
+            break;
+        }
+        testResult = utils:executeCommand("bal test", projectPath);
+        if testResult.success {
+            return {success: true, attempts, stdout: testResult.stdout, stderr: testResult.stderr, modifiedFiles};
+        }
+    }
+
+    return {
+        success: false,
+        attempts,
+        stdout: testResult.stdout,
+        stderr: testResult.stderr,
+        modifiedFiles
+    };
+}
+
 // Java patch-based edit types and functions
 
 function normalizeJsonResponse(string responseText) returns string {

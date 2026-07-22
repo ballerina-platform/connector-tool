@@ -37,14 +37,14 @@ const int CHUNK_SIZE = 50000;
 // 10 chunks = 500 KB — enough to capture all API-surface changes in practice.
 const int MAX_CHUNKS = 10;
 
-type AnalysisResult record {
+public type AnalysisResult record {|
     string changeType;
     string[] breakingChanges;
     string[] newFeatures;
     string[] bugFixes;
     string summary;
     string confidence;
-};
+|};
 
 const string VERSION_RULES = string `RULES FOR VERSION CLASSIFICATION:
 - MAJOR: Breaking changes (removed/renamed methods, removed/renamed types, changed method signatures, changed field types, removed fields)
@@ -162,13 +162,48 @@ ${JSON_SCHEMA}`;
     return parseAnalysisResponse(content);
 }
 
-function analyzeWithAnthropic(string gitDiff) returns AnalysisResult|error {
+public function analyzeVersionChange(string gitDiff) returns AnalysisResult|error {
+    if gitDiff.trim().length() == 0 {
+        return error("Git diff is empty");
+    }
     ai:ModelProvider model = check buildModel();
 
     if gitDiff.length() <= CHUNK_SIZE {
         return analyzeInSingleTurn(model, gitDiff);
     }
     return analyzeInChunks(model, gitDiff);
+}
+
+public function printVersionChangeAnalysis(AnalysisResult analysis, string recommendedVersion = "") {
+    io:fprintln(io:stderr, SEPARATOR);
+    io:fprintln(io:stderr, "VERSION CHANGE ANALYSIS");
+    io:fprintln(io:stderr, SEPARATOR);
+    io:fprintln(io:stderr, string `
+Version Bump: ${analysis.changeType}
+${recommendedVersion.length() > 0 ? string `Recommended Version: ${recommendedVersion}\n` : ""}Confidence:   ${analysis.confidence}
+
+Summary:
+${analysis.summary}`);
+
+    if analysis.breakingChanges.length() > 0 {
+        io:fprintln(io:stderr, "\nBREAKING CHANGES:");
+        foreach string change in analysis.breakingChanges {
+            io:fprintln(io:stderr, string `  - ${change}`);
+        }
+    }
+    if analysis.newFeatures.length() > 0 {
+        io:fprintln(io:stderr, "\nNEW FEATURES:");
+        foreach string feature in analysis.newFeatures {
+            io:fprintln(io:stderr, string `  - ${feature}`);
+        }
+    }
+    if analysis.bugFixes.length() > 0 {
+        io:fprintln(io:stderr, "\nIMPROVEMENTS:");
+        foreach string fix in analysis.bugFixes {
+            io:fprintln(io:stderr, string `  - ${fix}`);
+        }
+    }
+    io:fprintln(io:stderr, SEPARATOR);
 }
 
 // Accepts a file path so the diff is never passed as a shell argument,
@@ -184,40 +219,8 @@ public function main(string diffFilePath) returns error? {
         return error("Git diff file is empty");
     }
 
-    AnalysisResult analysis = check analyzeWithAnthropic(gitDiffContent);
-
-    io:fprintln(io:stderr, SEPARATOR);
-    io:fprintln(io:stderr, "VERSION CHANGE ANALYSIS");
-    io:fprintln(io:stderr, SEPARATOR);
-    io:fprintln(io:stderr, string `
-Version Bump: ${analysis.changeType}
-Confidence:   ${analysis.confidence}
-
-Summary:
-${analysis.summary}`);
-
-    if analysis.breakingChanges.length() > 0 {
-        io:fprintln(io:stderr, "\nBREAKING CHANGES:");
-        foreach string change in analysis.breakingChanges {
-            io:fprintln(io:stderr, string `  - ${change}`);
-        }
-    }
-
-    if analysis.newFeatures.length() > 0 {
-        io:fprintln(io:stderr, "\nNEW FEATURES:");
-        foreach string feature in analysis.newFeatures {
-            io:fprintln(io:stderr, string `  - ${feature}`);
-        }
-    }
-
-    if analysis.bugFixes.length() > 0 {
-        io:fprintln(io:stderr, "\nIMPROVEMENTS:");
-        foreach string fix in analysis.bugFixes {
-            io:fprintln(io:stderr, string `  - ${fix}`);
-        }
-    }
-
-    io:fprintln(io:stderr, SEPARATOR);
+    AnalysisResult analysis = check analyzeVersionChange(gitDiffContent);
+    printVersionChangeAnalysis(analysis);
 
     json resultJson = check analysis.cloneWithType(json);
     check io:fileWriteJson("analysis_result.json", resultJson);
