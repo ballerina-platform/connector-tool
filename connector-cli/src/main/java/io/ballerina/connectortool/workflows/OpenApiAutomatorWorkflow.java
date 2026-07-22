@@ -85,7 +85,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
 
     @CommandLine.Option(names = {"-x", "--exclude"},
             description = "Exclude a pipeline stage. Repeatable. "
-                    + "Valid stages: sanitize, client, tests, examples, docs, summary.")
+                    + "Valid stages: sanitize, client, tests, examples, docs.")
     public List<String> excludedStages = new ArrayList<>();
 
     @CommandLine.Option(names = {"--license"},

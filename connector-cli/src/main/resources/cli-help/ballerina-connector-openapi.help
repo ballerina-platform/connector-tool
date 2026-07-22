@@ -11,10 +11,11 @@ SYNOPSIS
 DESCRIPTION
        Run AI-assisted stages to sanitize an OpenAPI specification, generate
        a Ballerina client, fix compilation errors, generate tests and
-       examples, produce README documentation, and summarize client changes.
+       examples, and produce README documentation. Client generation also
+       summarizes API changes and recommends a semantic version update.
 
-       All six stages run by default in the following order:
-       sanitize → client → tests → examples → docs → summary.
+       All five stages run by default in the following order:
+       sanitize → client → tests → examples → docs.
 
        Use -x/--exclude to skip individual stages and run only the stages
        you need.
@@ -33,7 +34,8 @@ STAGES
        client
             Generate a Ballerina client project from the sanitized
             specification. Automatically apply compilation fixes if errors
-            are found after generation.
+            are found after generation, then analyze client.bal and types.bal
+            changes and recommend a semantic version update.
 
        tests
             Generate connector tests, including a mock server module and a
@@ -46,10 +48,6 @@ STAGES
        docs
             Generate README documentation for the connector, its tests,
             and its examples.
-
-       summary
-            Analyze Git changes in client.bal and types.bal and recommend a
-            semantic version update.
 
 OPTIONS
        -i <path>, --input=<path>
@@ -80,7 +78,7 @@ OPTIONS
 
        -x <stage>, --exclude=<stage>
             Exclude a pipeline stage. Repeatable. Valid values: sanitize,
-            client, tests, examples, docs, summary.
+            client, tests, examples, docs.
 
        --remote
             Generate client APIs as remote methods instead of the default
@@ -106,13 +104,12 @@ EXAMPLES
 
        Run only the sanitize stage.
            $ bal connector openapi -i ./openapi.yaml -o ./out \
-                 -x client -x tests -x examples -x docs -x summary
+                 -x client -x tests -x examples -x docs
 
        Generate a client from an existing sanitized specification with a
        license header and tag filters.
            $ bal connector openapi -i ./openapi.yaml -o ./out \
                  -x sanitize -x tests -x examples -x docs \
-                 -x summary \
                  --license ./license.txt -t Accounts -t Payments
 
        Re-run the full pipeline on an existing connector directory (applies

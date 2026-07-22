@@ -38,8 +38,7 @@ public final class OpenApiStageValidationUtils {
         CLIENT,
         TESTS,
         EXAMPLES,
-        DOCS,
-        SUMMARY
+        DOCS
     }
 
     /**
@@ -62,7 +61,7 @@ public final class OpenApiStageValidationUtils {
                 ValidStages.valueOf(stage.toUpperCase());
             } catch (IllegalArgumentException e) {
                 throw new CliException("unknown stage '" + stage + "'", 2,
-                        "-x", "valid stages: sanitize, client, tests, examples, docs, summary");
+                        "-x", "valid stages: sanitize, client, tests, examples, docs");
             }
         }
 

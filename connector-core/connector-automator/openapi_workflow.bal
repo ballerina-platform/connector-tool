@@ -44,7 +44,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         utils:logInfo(string `skipping stages: ${string:'join(", ", ...excluded)}`);
     }
 
-    string[] allStages = ["sanitize", "client", "tests", "examples", "docs", "summary"];
+    string[] allStages = ["sanitize", "client", "tests", "examples", "docs"];
     int total = allStages.filter(s => excluded.indexOf(s) is ()).length();
     int step = 0;
 
@@ -157,6 +157,12 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             }
         }
         utils:logInfo("✓ client built and validated");
+
+        error? summaryResult = client_regenerator:executeVersionSummary(outputDir);
+        if summaryResult is error {
+            utils:logWarn(string `version analysis skipped: ${summaryResult.message()}`);
+        }
+
         if interactive && step < total {
             if !interactivePause(outputDir) {
                 utils:logInfo("Stopped at user request.");
@@ -267,18 +273,6 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         }
     } else {
         utils:logVerbose("skipping docs (excluded)");
-    }
-
-    // Stage 6: Summarizing client and type changes.
-    if excluded.indexOf("summary") is () {
-        step += 1;
-        utils:logStep(step, total, "Summarizing Connector Changes");
-        error? summaryResult = client_regenerator:executeVersionSummary(outputDir);
-        if summaryResult is error {
-            utils:logWarn(string `change summary skipped: ${summaryResult.message()}`);
-        }
-    } else {
-        utils:logVerbose("skipping summary (excluded)");
     }
 
     utils:logCompletion(outputDir);
