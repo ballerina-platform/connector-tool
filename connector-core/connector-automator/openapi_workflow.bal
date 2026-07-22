@@ -193,7 +193,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         }
 
         if check file:test(testsDir, file:EXISTS) {
-            code_fixer:TestFixResult|error validationResult = code_fixer:fixBalTestFailures(ballerinaDir);
+            test_generator:TestValidationResult|error validationResult = test_generator:validateGeneratedTests(ballerinaDir);
             if validationResult is error {
                 utils:logWarn(string `test validation could not complete: ${validationResult.message()}`);
             } else if validationResult.success {
@@ -243,8 +243,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         }
     } else {
         utils:logVerbose("skipping examples (excluded)");
-        example_generator:ExampleRepairResult|error repairResult =
-            example_generator:repairExistingExamples(outputDir, examplesDir);
+        example_generator:ExampleRepairResult|error repairResult = example_generator:repairExistingExamples(outputDir, examplesDir);
         if repairResult is error {
             utils:logWarn(string `retained examples could not be repaired: ${repairResult.message()}`);
         } else if repairResult.total > 0 {

@@ -51,11 +51,8 @@ public type FixResponse record {|
     string explanation;
 |};
 
-public type TestFixResult record {|
-    boolean success;
-    int attempts;
-    string stdout;
-    string stderr;
+public type TestRepairResult record {|
+    boolean applied;
     string[] modifiedFiles;
 |};
 

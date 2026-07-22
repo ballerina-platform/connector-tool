@@ -26,3 +26,11 @@ public type ConnectorAnalysis record {
     string clientContent = "";
     string typesContent = "";
 };
+
+// Result of validating and, when necessary, repairing generated tests.
+public type TestValidationResult record {|
+    boolean success;
+    int attempts;
+    string stdout;
+    string stderr;
+|};

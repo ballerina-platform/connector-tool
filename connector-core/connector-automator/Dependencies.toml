@@ -482,4 +482,3 @@ modules = [
 	{org = "wso2", packageName = "connector_automator", moduleName = "connector_automator.test_generator"},
 	{org = "wso2", packageName = "connector_automator", moduleName = "connector_automator.utils"}
 ]
-

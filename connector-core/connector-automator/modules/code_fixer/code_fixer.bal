@@ -874,87 +874,55 @@ function selectTestFailureCandidates(string projectPath, string diagnostics) ret
     return available;
 }
 
-public function fixBalTestFailures(string projectPath, int iterationLimit = maxIterations) returns TestFixResult|error {
+public function getConfiguredMaxIterations() returns int {
+    return maxIterations;
+}
+
+public function fixBalTestFailure(string projectPath, utils:CommandResult testResult, int attempt = 1)
+        returns TestRepairResult|error {
     if !utils:isAIServiceInitialized() {
         check utils:initAIService();
     }
 
-    utils:CommandResult testResult = utils:executeCommand("bal test", projectPath);
     if testResult.success {
-        return {success: true, attempts: 0, stdout: testResult.stdout, stderr: testResult.stderr, modifiedFiles: []};
+        return {applied: false, modifiedFiles: []};
     }
     if (check testFailureCandidates(projectPath)).length() == 0 {
-        return {success: false, attempts: 0, stdout: testResult.stdout, stderr: testResult.stderr, modifiedFiles: []};
+        return {applied: false, modifiedFiles: []};
     }
 
-    int attempts = 0;
-    string previousDiagnostics = "";
-    map<FixAttempt[]> history = {};
+    string diagnostics = string `${testResult.stderr}\n${testResult.stdout}`;
     string[] modifiedFiles = [];
+    boolean applied = false;
+    string[] candidates = check selectTestFailureCandidates(projectPath, diagnostics);
 
-    while attempts < iterationLimit {
-        string diagnostics = string `${testResult.stderr}\n${testResult.stdout}`;
-        if attempts > 0 && diagnostics == previousDiagnostics {
-            utils:logWarn("`bal test` diagnostics did not change — stopping test repair");
-            break;
-        }
-        previousDiagnostics = diagnostics;
-        attempts += 1;
-        boolean applied = false;
-        string[] candidates = check selectTestFailureCandidates(projectPath, diagnostics);
-
-        foreach string relativePath in candidates {
-            string fullPath = check file:joinPath(projectPath, relativePath);
-            string currentCode = check io:fileReadString(fullPath);
-            FixAttempt[] previousAttempts = history.hasKey(relativePath) ? history.get(relativePath) : [];
-            string prompt = createTestFailureFixPrompt(currentCode, relativePath, testResult.stderr, testResult.stdout,
-                    getTypeContextForFile(projectPath, relativePath), buildFixHistoryContext(previousAttempts));
-            string|error response = utils:callAI(prompt);
-            if response is error {
-                utils:logWarn(string `could not generate a test fix for ${relativePath}: ${response.message()}`);
-                continue;
-            }
-
-            string fixedCode = normalizeCodeResponse(response);
-            if fixedCode.length() == 0 || fixedCode == currentCode.trim() {
-                continue;
-            }
-            boolean|error applyResult = applyFix(projectPath, relativePath, fixedCode);
-            if applyResult is error || !applyResult {
-                continue;
-            }
-            applied = true;
-            if modifiedFiles.indexOf(relativePath) is () {
-                modifiedFiles.push(relativePath);
-            }
-            FixAttempt attempt = {
-                iteration: attempts,
-                errorMessages: [diagnostics],
-                appliedFix: string `Updated ${relativePath} for bal test failure`
-            };
-            if !history.hasKey(relativePath) {
-                history[relativePath] = [];
-            }
-            history.get(relativePath).push(attempt);
+    foreach string relativePath in candidates {
+        string fullPath = check file:joinPath(projectPath, relativePath);
+        string currentCode = check io:fileReadString(fullPath);
+        string fixHistory = attempt > 1 ? string `Retry attempt ${attempt}; do not return the unchanged source.` : "";
+        string prompt = createTestFailureFixPrompt(currentCode, relativePath, testResult.stderr, testResult.stdout,
+                getTypeContextForFile(projectPath, relativePath), fixHistory);
+        string|error response = utils:callAI(prompt);
+        if response is error {
+            utils:logWarn(string `could not generate a test fix for ${relativePath}: ${response.message()}`);
+            continue;
         }
 
-        if !applied {
-            utils:logWarn("AI produced no applicable test changes — stopping test repair");
-            break;
+        string fixedCode = normalizeCodeResponse(response);
+        if fixedCode.length() == 0 || fixedCode == currentCode.trim() {
+            continue;
         }
-        testResult = utils:executeCommand("bal test", projectPath);
-        if testResult.success {
-            return {success: true, attempts, stdout: testResult.stdout, stderr: testResult.stderr, modifiedFiles};
+        boolean|error applyResult = applyFix(projectPath, relativePath, fixedCode);
+        if applyResult is error || !applyResult {
+            continue;
+        }
+        applied = true;
+        if modifiedFiles.indexOf(relativePath) is () {
+            modifiedFiles.push(relativePath);
         }
     }
 
-    return {
-        success: false,
-        attempts,
-        stdout: testResult.stdout,
-        stderr: testResult.stderr,
-        modifiedFiles
-    };
+    return {applied, modifiedFiles};
 }
 
 // Java patch-based edit types and functions
