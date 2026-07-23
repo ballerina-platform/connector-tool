@@ -155,49 +155,9 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
         yamlAlignedSpec = ymlAlignedSpec;
     }
 
-    string|io:Error yamlContent = io:fileReadString(yamlAlignedSpec);
-    if yamlContent is io:Error {
-        return error("Failed to read YAML aligned spec file: " + yamlContent.message());
-    }
-
-    json|yaml:Error jsonData = yaml:readString(yamlContent);
-
+    json|yaml:Error jsonData = yaml:readFile(yamlAlignedSpec);
     if jsonData is yaml:Error {
-        utils:logVerbose(string `Ballerina YAML parser failed, trying yq fallback: ${jsonData.message()}`);
-
-        string escapedPath = "'" + regexp:replaceAll(re `'`, yamlAlignedSpec, "'\\''") + "'";
-
-        utils:CommandResult yqResult = utils:executeCommand(
-            string `yq -o=json '.' ${escapedPath}`,
-            "."
-        );
-
-        if utils:isCommandSuccessfull(yqResult) && yqResult.stdout.length() > 0 {
-            json|error yqJson = yqResult.stdout.fromJsonString();
-            if yqJson is json {
-                check writeJsonAtomically(jsonAlignedSpec, yqJson);
-                utils:logVerbose("converted YAML to JSON via yq");
-                return;
-            }
-            utils:logVerbose("yq produced invalid JSON, trying Python fallback");
-        }
-
-        utils:CommandResult pythonResult = utils:executeCommand(
-            string `python3 -c 'import sys,yaml,json; print(json.dumps(yaml.safe_load(sys.stdin), indent=2))' < ${escapedPath}`,
-            "."
-        );
-
-        if utils:isCommandSuccessfull(pythonResult) && pythonResult.stdout.length() > 0 {
-            json|error pythonJson = pythonResult.stdout.fromJsonString();
-            if pythonJson is json {
-                check writeJsonAtomically(jsonAlignedSpec, pythonJson);
-                utils:logVerbose("converted YAML to JSON via Python");
-                return;
-            }
-        }
-
-        return error("Failed to parse YAML content: " + jsonData.message() +
-            ". Fallback tools (yq, python) also failed or not available.");
+        return error("Failed to parse YAML content: " + jsonData.message());
     }
 
     check writeJsonAtomically(jsonAlignedSpec, jsonData);
