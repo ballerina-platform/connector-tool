@@ -18,6 +18,8 @@ import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
 
+import wso2/connector_automator.utils;
+
 function safeSubstring(string str, int startIndex, int endIndex) returns string {
     int actualEnd = endIndex < str.length() ? endIndex : str.length();
     if actualEnd <= startIndex {
@@ -41,13 +43,13 @@ function parsePrDescription(string prDescription) returns map<string[]>|error {
 
         if trimmed == "Breaking Changes" || trimmed == "### Breaking Changes" {
             currentSection = "Changed";
-            io:fprintln(io:stderr, "Found Breaking Changes section");
+            utils:logVerbose("found Breaking Changes section");
         } else if trimmed == "New Features" || trimmed == "### New Features" {
             currentSection = "Added";
-            io:fprintln(io:stderr, "Found New Features section");
+            utils:logVerbose("found New Features section");
         } else if trimmed == "Improvements" || trimmed == "### Improvements" {
             currentSection = "Fixed";
-            io:fprintln(io:stderr, "Found Improvements section");
+            utils:logVerbose("found Improvements section");
         } else if trimmed.startsWith("- ") {
             string item = trimmed.substring(2).trim();
 
@@ -60,7 +62,7 @@ function parsePrDescription(string prDescription) returns map<string[]>|error {
                 if item.length() > 50 {
                     preview = preview + "...";
                 }
-                io:fprintln(io:stderr, string `Added to ${currentSection}: ${preview}`);
+                utils:logVerbose(string `added to ${currentSection}: ${preview}`);
             }
         }
     }
@@ -114,12 +116,11 @@ function findChangelogFile() returns string|error? {
 }
 
 function updateChangelog(string prDescription) returns error? {
-    io:fprintln(io:stderr, "Updating CHANGELOG.md...");
-    io:fprintln(io:stderr, string `PR Description length: ${prDescription.length()} chars`);
-    io:fprintln(io:stderr, "First 200 chars of PR description:");
+    utils:logInfo("updating CHANGELOG.md...");
+    utils:logVerbose(string `PR description length: ${prDescription.length()} chars`);
 
     string preview = safeSubstring(prDescription, 0, 200);
-    io:fprintln(io:stderr, preview);
+    utils:logVerbose(string `first 200 chars of PR description:\n${preview}`);
 
     map<string[]> changes = check parsePrDescription(prDescription);
 
@@ -127,25 +128,25 @@ function updateChangelog(string prDescription) returns error? {
                        (changes["Changed"] ?: []).length() +
                        (changes["Fixed"] ?: []).length();
 
-    io:fprintln(io:stderr, string `Total changes found: ${totalChanges}`);
-    io:fprintln(io:stderr, string `Added: ${(changes["Added"] ?: []).length()}`);
-    io:fprintln(io:stderr, string `Changed: ${(changes["Changed"] ?: []).length()}`);
-    io:fprintln(io:stderr, string `Fixed: ${(changes["Fixed"] ?: []).length()}`);
+    utils:logVerbose(string `total changes found: ${totalChanges}`);
+    utils:logVerbose(string `added: ${(changes["Added"] ?: []).length()}`);
+    utils:logVerbose(string `changed: ${(changes["Changed"] ?: []).length()}`);
+    utils:logVerbose(string `fixed: ${(changes["Fixed"] ?: []).length()}`);
 
     if totalChanges == 0 {
-        io:fprintln(io:stderr, "No changelog entries found in PR description");
+        utils:logInfo("no changelog entries found in PR description");
         return;
     }
 
     string? existingFile = check findChangelogFile();
     string changelogPath = existingFile is string ? existingFile : "CHANGELOG.md";
 
-    io:fprintln(io:stderr, string `Using changelog file: ${changelogPath}`);
+    utils:logVerbose(string `using changelog file: ${changelogPath}`);
 
     string newUnreleasedSection = generateUnreleasedSection(changes);
 
     if existingFile is string {
-        io:fprintln(io:stderr, "Updating existing CHANGELOG.md");
+        utils:logVerbose("updating existing CHANGELOG.md");
         string content = check io:fileReadString(changelogPath);
         string[] lines = regexp:split(re `\n`, content);
 
@@ -183,7 +184,7 @@ function updateChangelog(string prDescription) returns error? {
 
             string updatedContent = string:'join("\n", ...updatedLines);
             check io:fileWriteString(changelogPath, updatedContent);
-            io:fprintln(io:stderr, "Updated existing CHANGELOG.md");
+            utils:logInfo("updated existing CHANGELOG.md");
         } else {
             int insertIndex = 0;
 
@@ -215,15 +216,15 @@ function updateChangelog(string prDescription) returns error? {
 
             string updatedContent = string:'join("\n", ...updatedLines);
             check io:fileWriteString(changelogPath, updatedContent);
-            io:fprintln(io:stderr, "Added [Unreleased] section to existing CHANGELOG.md");
+            utils:logInfo("added [Unreleased] section to existing CHANGELOG.md");
         }
     } else {
-        io:fprintln(io:stderr, "Creating new CHANGELOG.md");
+        utils:logVerbose("creating new CHANGELOG.md");
         check io:fileWriteString(changelogPath, buildNewChangelog(newUnreleasedSection));
-        io:fprintln(io:stderr, "Created new CHANGELOG.md");
+        utils:logInfo("created new CHANGELOG.md");
     }
 
-    io:fprintln(io:stderr, string `Added ${totalChanges} changelog entries`);
+    utils:logInfo(string `added ${totalChanges} changelog entries`);
 }
 
 function buildNewChangelog(string unreleasedSection) returns string {

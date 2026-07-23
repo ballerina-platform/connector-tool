@@ -110,8 +110,7 @@ public function executeVersionSummary(string connectorPath) returns error? {
     }
     string gitDiff = string:'join("\n", ...diffs).trim();
     if gitDiff.length() == 0 {
-        utils:logInfo("Version Bump: NONE");
-        utils:logInfo("No client/types changes; no version bump required");
+        printNoVersionChangeAnalysis();
         return;
     }
 

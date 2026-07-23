@@ -18,6 +18,8 @@ import ballerina/io;
 import ballerina/file;
 import ballerina/lang.regexp;
 
+import wso2/connector_automator.utils;
+
 type TypeDefinition record {|
     string content;
     string name;
@@ -207,7 +209,7 @@ function sortAndWriteType(string inputPath, string outputPath) returns error? {
 
     if typeDefs.length() == 0 {
         check io:fileWriteString(outputPath, content);
-        io:fprintln(io:stderr, "No type definitions found, file copied as-is");
+        utils:logInfo("no type definitions found, file copied as-is");
         return;
     }
 
@@ -234,8 +236,8 @@ function sortAndWriteType(string inputPath, string outputPath) returns error? {
 
     check io:fileWriteString(outputPath, string:'join("\n", ...outputLines));
 
-    io:fprintln(io:stderr, string `Sorted ${typeDefs.length()} type definitions`);
-    io:fprintln(io:stderr, string `Written to: ${outputPath}`);
+    utils:logInfo(string `sorted ${typeDefs.length()} type definitions`);
+    utils:logVerbose(string `written to: ${outputPath}`);
 }
 
 public function runSortBallerinaType(string[] args) returns error? {
@@ -248,7 +250,7 @@ public function runSortBallerinaType(string[] args) returns error? {
     string outputFile = args[1];
 
     if !check file:test(inputFile, file:EXISTS) {
-        io:fprintln(io:stderr, string `Input file not found: ${inputFile}`);
+        utils:logError(string `input file not found: ${inputFile}`);
         return error("Input file not found");
     }
 
