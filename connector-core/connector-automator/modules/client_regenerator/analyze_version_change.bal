@@ -23,7 +23,6 @@ import ballerinax/ai.anthropic;
 
 import wso2/connector_automator.utils;
 
-const string SEPARATOR = "============================================================";
 const string ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
 
 const int MAX_RETRIES = 4;
@@ -179,9 +178,7 @@ public function analyzeVersionChange(string gitDiff) returns AnalysisResult|erro
 function formatVersionChangeAnalysis(AnalysisResult analysis, string recommendedVersion = "") returns string {
     string recommendedVersionLine = recommendedVersion.length() > 0 ? string `Recommended Version: ${recommendedVersion}
 ` : "";
-    string report = string `${SEPARATOR}
-VERSION CHANGE ANALYSIS
-${SEPARATOR}
+    string report = string `Version change analysis
 
 Version Bump: ${analysis.changeType}
 ${recommendedVersionLine}Confidence:   ${analysis.confidence}
@@ -189,35 +186,7 @@ ${recommendedVersionLine}Confidence:   ${analysis.confidence}
 Summary:
 ${analysis.summary}`;
 
-    if analysis.breakingChanges.length() > 0 {
-        report += string `
-
-BREAKING CHANGES:`;
-        foreach string change in analysis.breakingChanges {
-            report += string `
-  - ${change}`;
-        }
-    }
-    if analysis.newFeatures.length() > 0 {
-        report += string `
-
-NEW FEATURES:`;
-        foreach string feature in analysis.newFeatures {
-            report += string `
-  - ${feature}`;
-        }
-    }
-    if analysis.bugFixes.length() > 0 {
-        report += string `
-
-IMPROVEMENTS:`;
-        foreach string fix in analysis.bugFixes {
-            report += string `
-  - ${fix}`;
-        }
-    }
-    return string `${report}
-${SEPARATOR}`;
+    return report;
 }
 
 function formatNoVersionChangeAnalysis() returns string {
