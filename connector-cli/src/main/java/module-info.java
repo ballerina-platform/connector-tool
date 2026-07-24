@@ -17,7 +17,7 @@
  */
 
 module io.ballerina.connectortool {
-    requires info.picocli;
+    requires transitive info.picocli;
     requires io.ballerina.cli;
     requires io.ballerina.tools.api;
     requires io.ballerina.lang;

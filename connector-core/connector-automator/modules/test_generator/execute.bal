@@ -13,6 +13,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import wso2/connector_automator.code_fixer;
 import wso2/connector_automator.utils;
 
 import ballerina/lang.regexp;
@@ -30,6 +31,41 @@ public function executeTestGen(string workflowType, string connectorPath, string
             return error(string `Unknown workflow type: '${workflowType}'. Use 'openapi' or 'sdk'.`);
         }
     }
+}
+
+// Runs the generated tests and attempts to repair test failures until they pass or no progress can be made.
+public function validateGeneratedTests(string ballerinaDir) returns TestValidationResult|error {
+    utils:CommandResult testResult = utils:executeCommand("bal test", ballerinaDir);
+    if testResult.success {
+        return {success: true, attempts: 0, stdout: testResult.stdout, stderr: testResult.stderr};
+    }
+
+    int attempts = 0;
+    string previousDiagnostics = "";
+    int iterationLimit = code_fixer:getConfiguredMaxIterations();
+    while attempts < iterationLimit {
+        string diagnostics = string `${testResult.stderr}\n${testResult.stdout}`;
+        if attempts > 0 && diagnostics == previousDiagnostics {
+            utils:logWarn("`bal test` diagnostics did not change — stopping test repair");
+            break;
+        }
+        previousDiagnostics = diagnostics;
+        attempts += 1;
+
+        code_fixer:TestRepairResult repairResult =
+            check code_fixer:fixBalTestFailure(ballerinaDir, testResult, attempts);
+        if !repairResult.applied {
+            utils:logWarn("AI produced no applicable test changes — stopping test repair");
+            break;
+        }
+
+        testResult = utils:executeCommand("bal test", ballerinaDir);
+        if testResult.success {
+            return {success: true, attempts, stdout: testResult.stdout, stderr: testResult.stderr};
+        }
+    }
+
+    return {success: false, attempts, stdout: testResult.stdout, stderr: testResult.stderr};
 }
 
 // SDK live-test execution flow (no mock server; live API tests only).
@@ -157,4 +193,3 @@ public function executeOpenApiTestGen(string connectorPath, string specPath) ret
 
     utils:logInfo(string `✓ tests generated at ${ballerinaDir}/tests/`);
 }
-

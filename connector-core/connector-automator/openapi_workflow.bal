@@ -17,6 +17,7 @@ import ballerina/file;
 import ballerina/io;
 
 import wso2/connector_automator.client_generator as client_generator;
+import wso2/connector_automator.client_regenerator as client_regenerator;
 import wso2/connector_automator.code_fixer as code_fixer;
 import wso2/connector_automator.document_generator as document_generator;
 import wso2/connector_automator.example_generator as example_generator;
@@ -156,6 +157,12 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             }
         }
         utils:logInfo("✓ client built and validated");
+
+        error? summaryResult = client_regenerator:executeVersionSummary(outputDir);
+        if summaryResult is error {
+            utils:logWarn(string `version analysis skipped: ${summaryResult.message()}`);
+        }
+
         if interactive && step < total {
             if !interactivePause(outputDir) {
                 utils:logInfo("Stopped at user request.");
@@ -190,8 +197,23 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         } else {
             utils:logInfo("✓ tests generated");
         }
+
+        if check file:test(testsDir, file:EXISTS) {
+            test_generator:TestValidationResult|error validationResult = test_generator:validateGeneratedTests(ballerinaDir);
+            if validationResult is error {
+                utils:logWarn(string `test validation could not complete: ${validationResult.message()}`);
+            } else if validationResult.success {
+                utils:logInfo("✓ bal test passed");
+            } else {
+                string diagnostics = validationResult.stderr.trim().length() > 0 ?
+                    validationResult.stderr.trim() : validationResult.stdout.trim();
+                utils:logWarn(string `bal test still fails after ${validationResult.attempts} repair attempt${validationResult.attempts == 1 ? "" : "s"}: ${diagnostics}`);
+            }
+        } else {
+            utils:logWarn("test validation skipped because no tests directory was generated");
+        }
         if interactive && step < total {
-            if !interactivePause(string `${outputDir}/tests/`) {
+            if !interactivePause(testsDir) {
                 utils:logInfo("Stopped at user request.");
                 return;
             }
@@ -205,15 +227,19 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         step += 1;
         utils:logStep(step, total, "Generating Examples");
 
-        // Cleanup the existing examples directories if exists.
-        example_generator:cleanupExistingExamples(examplesDir);
-
-        // Generating examples.
-        error? exampleResult = example_generator:executeExampleGen(outputDir, examplesDir);
-        if exampleResult is error {
-            utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`);
+        example_generator:ExampleCleanupResult|error cleanupResult =
+            example_generator:cleanupExistingExamples(examplesDir);
+        if cleanupResult is error {
+            utils:logWarn(string `could not clean existing examples: ${cleanupResult.message()} — skipping generation`);
+        } else if cleanupResult.failures.length() > 0 {
+            utils:logWarn(string `could not remove all existing examples: ${string:'join("; ", ...cleanupResult.failures)} — skipping generation`);
         } else {
-            utils:logInfo("✓ examples generated");
+            error? exampleResult = example_generator:executeExampleGen(outputDir, examplesDir);
+            if exampleResult is error {
+                utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`);
+            } else {
+                utils:logInfo("✓ examples generated");
+            }
         }
         if interactive && step < total {
             if !interactivePause(examplesDir) {
@@ -223,9 +249,19 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         }
     } else {
         utils:logVerbose("skipping examples (excluded)");
+        example_generator:ExampleRepairResult|error repairResult = example_generator:repairExistingExamples(outputDir, examplesDir);
+        if repairResult is error {
+            utils:logWarn(string `retained examples could not be repaired: ${repairResult.message()}`);
+        } else if repairResult.total > 0 {
+            if repairResult.failures.length() > 0 {
+                utils:logWarn(string `${repairResult.repaired}/${repairResult.total} retained examples validated; unresolved: ${string:'join("; ", ...repairResult.failures)}`);
+            } else {
+                utils:logInfo(string `✓ all ${repairResult.total} retained example${repairResult.total == 1 ? "" : "s"} validated`);
+            }
+        }
     }
 
-    // Stage 5: Generating Docs.tes
+    // Stage 5: Generating documentation.
     if excluded.indexOf("docs") is () {
         step += 1;
         utils:logStep(step, total, "Generating Documentation");

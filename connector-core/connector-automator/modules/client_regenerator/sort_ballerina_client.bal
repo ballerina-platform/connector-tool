@@ -18,6 +18,8 @@ import ballerina/io;
 import ballerina/file;
 import ballerina/lang.regexp;
 
+import wso2/connector_automator.utils;
+
 enum HttpMethod {
     METHOD_GET = "get",
     METHOD_POST = "post",
@@ -277,7 +279,7 @@ function sortAndWriteClient(string inputPath, string outputPath) returns error? 
 
     if methodBlocks.length() == 0 {
         check io:fileWriteString(outputPath, content);
-        io:fprintln(io:stderr, "No resource methods found, file copied as-is");
+        utils:logInfo("no resource methods found, file copied as-is");
         return;
     }
 
@@ -320,8 +322,8 @@ function sortAndWriteClient(string inputPath, string outputPath) returns error? 
 
     check io:fileWriteString(outputPath, string:'join("\n", ...outputLines));
 
-    io:fprintln(io:stderr, string `Sorted ${methods.length()} client methods (resource + remote)`);
-    io:fprintln(io:stderr, string `Written to: ${outputPath}`);
+    utils:logInfo(string `sorted ${methods.length()} client methods (resource + remote)`);
+    utils:logVerbose(string `written to: ${outputPath}`);
 }
 
 public function runSortBallerinaClient(string[] args) returns error? {
@@ -334,7 +336,7 @@ public function runSortBallerinaClient(string[] args) returns error? {
     string outputFile = args[1];
 
     if !check file:test(inputFile, file:EXISTS) {
-        io:fprintln(io:stderr, string `Input file not found: ${inputFile}`);
+        utils:logError(string `input file not found: ${inputFile}`);
         return error("Input file not found");
     }
 

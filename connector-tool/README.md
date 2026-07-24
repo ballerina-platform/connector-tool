@@ -58,7 +58,7 @@ The pipeline runs these stages in order. Any stage can be skipped with `-x <stag
 | Stage | What it does |
 |-------|-------------|
 | `sanitize` | Flatten, align, and AI-improve the OpenAPI spec; record sanitations |
-| `client` | Generate Ballerina client, types, and utils; fix compilation errors |
+| `client` | Generate Ballerina client, types, and utils; fix compilation errors; analyze API changes and recommend a semantic version update |
 | `tests` | Generate mock service and AI-assisted connector tests |
 | `examples` | Generate AI-assisted usage examples |
 | `docs` | Generate README documentation |

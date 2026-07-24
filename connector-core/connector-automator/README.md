@@ -275,7 +275,7 @@ bal run -- sdk generate-all <output-dir> [options]    # shortcut for generate-al
 │   ├── example-1/
 │   │   ├── main.bal
 │   │   ├── Ballerina.toml
-│   │   └── README.md
+│   │   └── example-1.md
 │   └── example-2/
 │       └── ...
 └── README.md
@@ -440,7 +440,7 @@ bal run -- openapi generate-docs <doc-command> <connector-path> [options]
 | `generate-ballerina` | Generate module README |
 | `generate-tests` | Generate tests README |
 | `generate-examples` | Generate examples README |
-| `generate-individual-examples` | Generate README for each example |
+| `generate-individual-examples` | Generate a named Markdown document for each example |
 | `generate-main` | Generate root README |
 
 **Example:**
@@ -477,7 +477,7 @@ bal run -- openapi generate-docs generate-all ./my-connector yes
     ├── example-1/
     │   ├── main.bal
     │   ├── Ballerina.toml
-    │   └── README.md
+    │   └── example-1.md
     └── example-2/
         └── ...
 ```

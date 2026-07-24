@@ -33,6 +33,13 @@ public function getLogLevel() returns LogLevel {
     return _activeLogLevel;
 }
 
+# Print pipeline output intended for downstream consumers.
+# Unlike diagnostic logging, this is always written to stdout and is not filtered by log level.
+# + output - Pipeable output to print
+public function printOutput(string output) {
+    io:println(output);
+}
+
 # Print a numbered step banner. Shown in normal and verbose modes.
 # + step - Current step number
 # + total - Total number of steps in the workflow

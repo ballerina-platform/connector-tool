@@ -129,9 +129,7 @@ public function executeExampleGen(string connectorPath, string examplesDir = "")
     }
 }
 
-function getExistingExampleDirectories(string connectorPath) returns string[]|error {
-    string examplesPath = connectorPath + "/examples";
-
+function getExistingExampleDirectories(string examplesPath) returns string[]|error {
     boolean examplesExist = check file:test(examplesPath, file:EXISTS);
     if !examplesExist {
         return [];
@@ -146,8 +144,10 @@ function getExistingExampleDirectories(string connectorPath) returns string[]|er
             string exampleName = lastSlash is int ? entry.absPath.substring(lastSlash + 1) : entry.absPath;
 
             string mainBalPath = entry.absPath + "/main.bal";
+            string ballerinaTomlPath = entry.absPath + "/Ballerina.toml";
             boolean hasMain = check file:test(mainBalPath, file:EXISTS);
-            if hasMain {
+            boolean hasBallerinaToml = check file:test(ballerinaTomlPath, file:EXISTS);
+            if hasMain && hasBallerinaToml {
                 exampleNames.push(exampleName);
             }
         }
@@ -156,22 +156,55 @@ function getExistingExampleDirectories(string connectorPath) returns string[]|er
     return exampleNames;
 }
 
-public function cleanupExistingExamples(string examplesPath) {
-    if file:test(examplesPath, file:EXISTS) !is true {
-        return;
+public function cleanupExistingExamples(string examplesPath) returns ExampleCleanupResult|error {
+    ExampleCleanupResult result = {removed: 0, failures: []};
+    if !(check file:test(examplesPath, file:EXISTS)) {
+        return result;
     }
-    file:MetaData[]|error entries = file:readDir(examplesPath);
-    if entries is error {
-        utils:logError(string `could not read examples directory: ${entries.message()}`);
-        return;
-    }
+    file:MetaData[] entries = check file:readDir(examplesPath);
     foreach file:MetaData entry in entries {
         if entry.dir {
-            error? removeResult = file:remove(entry.absPath, file:RECURSIVE);
-            if removeResult is error {
-                utils:logError(string `could not remove existing examples directory: ${removeResult.message()}`);
+            boolean hasMain = check file:test(entry.absPath + "/main.bal", file:EXISTS);
+            boolean hasBallerinaToml = check file:test(entry.absPath + "/Ballerina.toml", file:EXISTS);
+            if hasMain && hasBallerinaToml {
+                error? removeResult = file:remove(entry.absPath, file:RECURSIVE);
+                if removeResult is error {
+                    result.failures.push(string `${entry.absPath}: ${removeResult.message()}`);
+                } else {
+                    result.removed += 1;
+                }
             }
         }
     }
-    utils:logInfo("✓ existing examples cleaned up");
+    if result.removed > 0 {
+        utils:logInfo(string `✓ removed ${result.removed} existing use-case example${result.removed == 1 ? "" : "s"}`);
+    }
+    return result;
+}
+
+public function repairExistingExamples(string connectorPath, string examplesPath) returns ExampleRepairResult|error {
+    string[] exampleNames = check getExistingExampleDirectories(examplesPath);
+    ExampleRepairResult result = {total: exampleNames.length(), repaired: 0, failures: []};
+    if exampleNames.length() == 0 {
+        utils:logVerbose("no retained use-case examples found");
+        return result;
+    }
+
+    check packAndPushConnector(connectorPath);
+    foreach string exampleName in exampleNames {
+        string examplePath = examplesPath + "/" + exampleName;
+        error? fixResult = fixExampleCode(examplePath, exampleName);
+        if fixResult is error {
+            result.failures.push(string `${exampleName}: ${fixResult.message()}`);
+            continue;
+        }
+        utils:CommandResult buildResult = utils:executeBalBuild(examplePath);
+        if utils:hasCompilationErrors(buildResult) {
+            result.failures.push(string `${exampleName}: ${buildResult.stderr.trim()}`);
+            continue;
+        }
+        result.repaired += 1;
+        utils:logInfo(string `✓ retained example validated: ${exampleName}`);
+    }
+    return result;
 }

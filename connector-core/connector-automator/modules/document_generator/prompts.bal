@@ -338,7 +338,13 @@ IMPORTANT: Return only the Quickstart body. Do NOT include the ${backtick}## Qui
 `;
 }
 
-function createBallerinaExamplesPrompt(ConnectorMetadata metadata) returns string {
+function createBallerinaExamplesPrompt(ConnectorMetadata metadata, boolean linkExampleDocuments = false) returns string {
+
+    string examplesLink = linkExampleDocuments ? "../examples" :
+        string `https://github.com/ballerina-platform/module-ballerinax-${metadata.connectorName.toLowerAscii()}/tree/main/examples`;
+    string exampleLinkRule = linkExampleDocuments ?
+        string `Use the exact relative path ${backtick}../examples/[example_directory_name]/[example_directory_name].md${backtick}. Preserve the exact casing of the directory name in both path segments.` :
+        string `Use ${backtick}[GitHub_Repo_URL]/tree/main/examples/[example_directory_name]${backtick}.`;
 
     return string `
 
@@ -351,10 +357,10 @@ Your goal is to generate a section that is **structurally identical** to the per
 
 ## Examples
 
-The ${backtick}Smartsheet${backtick} connector provides practical examples illustrating usage in various scenarios. Explore these [examples](https://github.com/ballerina-platform/module-ballerinax-smartsheet/tree/main/examples), covering the following use cases:
+The ${backtick}Smartsheet${backtick} connector provides practical examples illustrating usage in various scenarios. Explore these [examples](${examplesLink}), covering the following use cases:
 
-1. [Project task management](https://github.com/ballerina-platform/module-ballerinax-smartsheet/tree/main/examples/project_task_management) - Demonstrates how to automate project task creation using Ballerina connector for Smartsheet.
-2. [Basic sheet operations](https://github.com/ballerina-platform/module-ballerinax-smartsheet/tree/main/examples/basic_sheet_operations) - Illustrates creating, retrieving, and deleting sheets.
+1. [Project task management](${linkExampleDocuments ? "../examples/project_task_management/project_task_management.md" : "https://github.com/ballerina-platform/module-ballerinax-smartsheet/tree/main/examples/project_task_management"}) - Demonstrates how to automate project task creation using Ballerina connector for Smartsheet.
+2. [Basic sheet operations](${linkExampleDocuments ? "../examples/basic_sheet_operations/basic_sheet_operations.md" : "https://github.com/ballerina-platform/module-ballerinax-smartsheet/tree/main/examples/basic_sheet_operations"}) - Illustrates creating, retrieving, and deleting sheets.
 
 ---
 
@@ -362,14 +368,14 @@ The ${backtick}Smartsheet${backtick} connector provides practical examples illus
 
 Now, generate a new "Examples" section for the connector specified below. You must follow these rules precisely:
 
-1.  **Replicate the Intro:** Use the exact introductory paragraph from the example, replacing the connector name and the main examples URL with the information provided. The main examples URL is the GitHub Repo URL followed by ${backtick}/tree/main/examples${backtick}.
+1.  **Replicate the Intro:** Use the exact introductory paragraph from the example, replacing the connector name. Use ${backtick}${examplesLink}${backtick} as the main examples link.
 
 2.  **Create an Ordered List:** For each example directory name provided in the "Connector Information", create one item in an ordered list (1., 2., 3., etc.).
 
 3.  **Format Each List Item:** Each item in the list MUST follow this exact format:
     ${backtick}[Example Title](URL_to_example) - One-sentence description.${backtick}
     * **Example Title:** Convert the snake_case directory name (e.g., ${backtick}project_task_management${backtick}) into a human-readable, lowercase title (e.g., "project task management").
-    * **URL_to_example:** Construct the full URL to the specific example's directory. This will be ${backtick}[GitHub_Repo_URL]/tree/main/examples/[example_directory_name]${backtick}.
+    * **URL_to_example:** ${exampleLinkRule}
     * **One-sentence description:** Write a single, concise sentence that summarizes the purpose of the example based on its name.
 
 **CONNECTOR INFORMATION TO USE:**
@@ -443,7 +449,7 @@ function createUsefulLinksSection(ConnectorMetadata metadata) returns string {
 // prompt generation functions for example README
 public function createIndividualExamplePrompt(ExampleData exampleData, ConnectorMetadata connectorMetadata) returns string {
     return string `
-    You are a senior Ballerina developer and technical writer. Your goal is to create a complete, self-contained README.md file for a single Ballerina example. The structure of the README **must adapt** based on the patterns you identify in the provided Ballerina code.
+    You are a senior Ballerina developer and technical writer. Your goal is to create a complete, self-contained ${exampleData.exampleDirName}.md file for a single Ballerina example. The structure of the document **must adapt** based on the patterns you identify in the provided Ballerina code.
 
 ---
 **PERFECT OUTPUT EXAMPLES (Notice the differences):**
@@ -578,7 +584,7 @@ ${tripleBacktick}ballerina
 ${exampleData.mainBalContent}
 ${tripleBacktick}
 
-Generate the complete README.md now, strictly following the checklist and adapting its structure to the code provided. Pay special attention to matching the EXACT variable names from configurable declarations to the Config.toml file.
+Generate the complete ${exampleData.exampleDirName}.md document now, strictly following the checklist and adapting its structure to the code provided. Pay special attention to matching the EXACT variable names from configurable declarations to the Config.toml file.
 `;
 }
 
@@ -596,9 +602,9 @@ Your goal is to generate a complete guide that is **structurally and textually i
 
 The ${backtick}twitter${backtick} connector provides practical examples illustrating usage in various scenarios. Explore these [examples](https://github.com/ballerina-platform/module-ballerinax-twitter/tree/main/examples), covering use cases like Direct message company mentions, and tweet performance tracker.
 
-1. [Direct message company mentions](https://github.com/ballerina-platform/module-ballerinax-twitter/tree/main/examples/DM-mentions) - Integrate Twitter to send direct messages to users who mention the company in tweets.
+1. [Direct message company mentions](./DM-mentions/DM-mentions.md) - Integrate Twitter to send direct messages to users who mention the company in tweets.
 
-2. [Tweet performance tracker](https://github.com/ballerina-platform/module-ballerinax-twitter/tree/main/examples/tweet-performance-tracker) - Analyze the performance of tweets posted by a user over the past month.
+2. [Tweet performance tracker](./tweet-performance-tracker/tweet-performance-tracker.md) - Analyze the performance of tweets posted by a user over the past month.
 
 ## Prerequisites
 
@@ -640,7 +646,7 @@ Now, generate a new "Examples" README for the connector specified below. You mus
     * For each directory name in "Available Example Directories", create one item in a numbered list (1., 2., 3., etc.).
     * Each list item MUST follow this format: ${backtick}[Example Title](URL_to_example) - One-sentence description.${backtick}
     * **Example Title:** Convert the directory name (e.g., "DM-mentions") into a human-readable title (e.g., "Direct message company mentions").
-    * **URL_to_example:** Construct the full URL using the GitHub Repo URL and the example directory name.
+    * **URL_to_example:** Use the exact relative path ${backtick}./[example_directory_name]/[example_directory_name].md${backtick}. Preserve the exact casing of the directory name in both path segments.
     * **One-sentence description:** Write a single, concise sentence that summarizes the purpose of the example based on its name.
 
 3.  **Static Sections:**

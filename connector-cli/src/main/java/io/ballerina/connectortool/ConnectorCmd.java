@@ -50,7 +50,11 @@ public class ConnectorCmd implements BLauncherCmd {
     @Override
     public void execute() {
         String commandUsageInfo = BLauncherCmd.getCommandUsageInfo(getName(), ConnectorCmd.class.getClassLoader());
-        outStream.println(commandUsageInfo);
+        if (baseCmd.helpFlag) {
+            outStream.println(commandUsageInfo);
+        } else {
+            errorStream.println(commandUsageInfo);
+        }
     }
 
     @Override

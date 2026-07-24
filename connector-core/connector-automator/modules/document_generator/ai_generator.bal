@@ -21,17 +21,18 @@ import ballerina/lang.'string as strings;
 import wso2/connector_automator.utils;
 
 public function generateAllDocumentation(string connectorPath) returns error? {
+    check generateIndividualExampleReadmes(connectorPath);
+    check generateExamplesReadme(connectorPath);
     check generateBallerinaReadme(connectorPath);
     check generateTestsReadme(connectorPath);
-    check generateExamplesReadme(connectorPath);
-    check generateIndividualExampleReadmes(connectorPath);
     check generateMainReadme(connectorPath);
     check generateKeywords(connectorPath);
 }
 
 public function generateBallerinaReadme(string connectorPath) returns error? {
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
-    map<string> aiContent = check generateBallerinaContent(metadata);
+    check retainDocumentedExamples(connectorPath, metadata);
+    map<string> aiContent = check generateBallerinaContent(metadata, true);
 
     TemplateData data = createTemplateData(metadata);
     data = mergeAIContent(data, aiContent);
@@ -75,7 +76,7 @@ public function generateIndividualExampleReadmes(string connectorPath) returns e
     string examplesPath = connectorPath + "/examples";
 
     if !check file:test(examplesPath, file:EXISTS) {
-        utils:logVerbose("no examples directory found — skipping individual READMEs");
+        utils:logVerbose("no examples directory found — skipping individual example documentation");
         return;
     }
 
@@ -93,17 +94,17 @@ public function generateIndividualExampleReadmes(string connectorPath) returns e
 
             error? result = generateSingleExampleReadme(example.absPath, exampleDirName, metadata);
             if result is error {
-                utils:logWarn(string `failed to generate README for ${exampleDirName}: ${result.message()}`);
+                utils:logWarn(string `failed to generate documentation for ${exampleDirName}: ${result.message()}`);
             } else {
                 successCount += 1;
-                utils:logVerbose(string `written: ${exampleDirPath}/README.md`);
+                utils:logVerbose(string `written: ${exampleDirPath}/${exampleDirName}.md`);
             }
             exampleCount += 1;
         }
     }
 
     if exampleCount > 0 {
-        utils:logVerbose(string `generated ${successCount}/${exampleCount} individual example READMEs`);
+        utils:logVerbose(string `generated ${successCount}/${exampleCount} individual example documents`);
     }
 }
 
@@ -123,8 +124,8 @@ function generateSingleExampleReadme(string examplePath, string exampleDirName, 
 
     string content = substituteVariables(exampleSpecificTemplate(), data);
 
-    string readmeFileName = "README.md";
-    string outputPath = examplePath + "/" + readmeFileName;
+    string documentFileName = exampleDirName + ".md";
+    string outputPath = examplePath + "/" + documentFileName;
 
     check writeOutput(content, outputPath);
 }
@@ -140,6 +141,7 @@ function generateIndividualExampleContent(ExampleData exampleData, ConnectorMeta
 
 public function generateExamplesReadme(string connectorPath) returns error? {
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
+    check retainDocumentedExamples(connectorPath, metadata);
     map<string> aiContent = check generateExamplesContent(metadata);
 
     TemplateData data = createTemplateData(metadata);
@@ -176,7 +178,8 @@ public function generateMainReadme(string connectorPath) returns error? {
     utils:logVerbose(string `written: ${outputPath}`);
 }
 
-function generateBallerinaContent(ConnectorMetadata metadata) returns map<string>|error {
+function generateBallerinaContent(ConnectorMetadata metadata, boolean linkExampleDocuments = false)
+        returns map<string>|error {
     map<string> content = {};
 
     string overviewPrompt = createBallerinaOverviewPrompt(metadata);
@@ -191,7 +194,7 @@ function generateBallerinaContent(ConnectorMetadata metadata) returns map<string
     string quickstartResult = check utils:callAI(quickstartPrompt);
     content["quickstart"] = quickstartResult;
 
-    string examplesPrompt = createBallerinaExamplesPrompt(metadata);
+    string examplesPrompt = createBallerinaExamplesPrompt(metadata, linkExampleDocuments);
     string examplesResult = check utils:callAI(examplesPrompt);
     content["examples"] = examplesResult;
 
@@ -239,6 +242,17 @@ function generateMainContent(ConnectorMetadata metadata) returns map<string>|err
     content["examples"] = examplesResult;
 
     return content;
+}
+
+function retainDocumentedExamples(string connectorPath, ConnectorMetadata metadata) returns error? {
+    string[] documentedExamples = [];
+    foreach string exampleName in metadata.examples {
+        string documentPath = connectorPath + "/examples/" + exampleName + "/" + exampleName + ".md";
+        if check file:test(documentPath, file:EXISTS) {
+            documentedExamples.push(exampleName);
+        }
+    }
+    metadata.examples = documentedExamples;
 }
 
 // Template processing functions.

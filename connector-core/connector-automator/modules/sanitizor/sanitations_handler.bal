@@ -1436,7 +1436,7 @@ function readSpecAsJson(string specPath) returns json|error {
         if parsed is json {
             return parsed;
         }
-        // Ballerina's YAML parser rejects backtick (U+0060) — same fix as convertAlignedYamlToJson.
+        // Keep the legacy backtick retry for sanitation comparison input only.
         int[] sanitizedCodePoints = from int cp in content.toCodePointInts()
             select (cp == 96 ? 95 : cp);
         string|error sanitized = string:fromCodePointInts(sanitizedCodePoints);

@@ -33,7 +33,8 @@ STAGES
        client
             Generate a Ballerina client project from the sanitized
             specification. Automatically apply compilation fixes if errors
-            are found after generation.
+            are found after generation, then analyze client.bal and types.bal
+            changes and recommend a semantic version update.
 
        tests
             Generate connector tests, including a mock server module and a

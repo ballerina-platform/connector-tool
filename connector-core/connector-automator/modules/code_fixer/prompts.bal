@@ -161,6 +161,43 @@ Do not repeat a previous failed change.`;
     return createFixPromptWithContext(contextualCode, errors, filePath, typeContext);
 }
 
+public function createTestFailureFixPrompt(string code, string filePath, string stderr, string stdout,
+        string typeContext, string fixHistory) returns string {
+    string tripleBacktick = "```";
+    return string `
+You are an expert Ballerina test engineer. A generated connector test suite failed when running ${"`"}bal test${"`"}.
+
+<EDIT_BOUNDARY>
+Fix only this generated test file: ${filePath}
+Do not change client.bal, types.bal, Ballerina.toml, or any file outside tests/.
+</EDIT_BOUNDARY>
+
+<BAL_TEST_STDERR>
+${stderr.length() > 0 ? stderr : "No stderr was captured."}
+</BAL_TEST_STDERR>
+
+<BAL_TEST_STDOUT>
+${stdout.length() > 0 ? stdout : "No stdout was captured."}
+</BAL_TEST_STDOUT>
+
+<CURRENT_TEST_FILE>
+${code}
+</CURRENT_TEST_FILE>
+
+<AUTHORITATIVE_CONNECTOR_CONTEXT>
+${typeContext}
+</AUTHORITATIVE_CONNECTOR_CONTEXT>
+
+<PREVIOUS_ATTEMPTS>
+${fixHistory.length() > 0 ? fixHistory : "None"}
+</PREVIOUS_ATTEMPTS>
+
+Repair compilation errors, assertion failures, panics, mock-service startup failures, and invalid generated test data while preserving the intended test coverage. Do not disable or remove tests merely to make the command pass. Keep the test deterministic and compatible with the supplied client and type definitions.
+
+Return only the complete corrected Ballerina source for ${filePath}. Do not include explanations, markdown, or ${tripleBacktick} fences.
+`;
+}
+
 // Build a targeted Java fix prompt that sends only the error-region context
 // and asks for a JSON patch response (not the whole file).
 public function createJavaFixPrompt(string code, CompilationError[] errors, string filePath,

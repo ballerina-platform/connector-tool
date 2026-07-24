@@ -21,7 +21,8 @@ import ballerina/os;
 import ballerina/lang.regexp;
 import ballerinax/ai.anthropic;
 
-const string SEPARATOR = "============================================================";
+import wso2/connector_automator.utils;
+
 const string ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
 
 const int MAX_RETRIES = 4;
@@ -37,14 +38,14 @@ const int CHUNK_SIZE = 50000;
 // 10 chunks = 500 KB — enough to capture all API-surface changes in practice.
 const int MAX_CHUNKS = 10;
 
-type AnalysisResult record {
+public type AnalysisResult record {|
     string changeType;
     string[] breakingChanges;
     string[] newFeatures;
     string[] bugFixes;
     string summary;
     string confidence;
-};
+|};
 
 const string VERSION_RULES = string `RULES FOR VERSION CLASSIFICATION:
 - MAJOR: Breaking changes (removed/renamed methods, removed/renamed types, changed method signatures, changed field types, removed fields)
@@ -110,9 +111,9 @@ function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns Analysi
     boolean truncated = totalChunks > MAX_CHUNKS;
 
     if truncated {
-        io:fprintln(io:stderr, string `Diff has ${totalChunks} chunks — capping at ${MAX_CHUNKS} to stay within model context limit (${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ${gitDiff.length() / 1000}KB analysed)`);
+        utils:logWarn(string `diff has ${totalChunks} chunks — capping at ${MAX_CHUNKS} to stay within model context limit (${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ${gitDiff.length() / 1000}KB analysed)`);
     } else {
-        io:fprintln(io:stderr, string `Diff too large for single turn — splitting into ${chunksToSend} chunks`);
+        utils:logInfo(string `diff too large for single turn — splitting into ${chunksToSend} chunks`);
     }
 
     ai:ChatMessage[] messages = [];
@@ -134,7 +135,7 @@ function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns Analysi
         int safeEnd = endIdx < gitDiff.length() ? endIdx : gitDiff.length();
         string chunk = gitDiff.substring(startIdx, safeEnd);
 
-        io:fprintln(io:stderr, string `Sending chunk ${i + 1}/${chunksToSend} (${chunk.length()} chars)`);
+        utils:logVerbose(string `sending chunk ${i + 1}/${chunksToSend} (${chunk.length()} chars)`);
 
         messages.push({role: "user", content: string `Part ${i + 1}/${chunksToSend}:\n\n${chunk}`});
         ai:ChatAssistantMessage chunkAck = check model->chat(messages);
@@ -162,7 +163,10 @@ ${JSON_SCHEMA}`;
     return parseAnalysisResponse(content);
 }
 
-function analyzeWithAnthropic(string gitDiff) returns AnalysisResult|error {
+public function analyzeVersionChange(string gitDiff) returns AnalysisResult|error {
+    if gitDiff.trim().length() == 0 {
+        return error("Git diff is empty");
+    }
     ai:ModelProvider model = check buildModel();
 
     if gitDiff.length() <= CHUNK_SIZE {
@@ -171,55 +175,50 @@ function analyzeWithAnthropic(string gitDiff) returns AnalysisResult|error {
     return analyzeInChunks(model, gitDiff);
 }
 
+function formatVersionChangeAnalysis(AnalysisResult analysis, string recommendedVersion = "") returns string {
+    string recommendedVersionLine = recommendedVersion.length() > 0 ? string `Recommended Version: ${recommendedVersion}
+` : "";
+    string report = string `Version change analysis
+
+Version Bump: ${analysis.changeType}
+${recommendedVersionLine}Confidence:   ${analysis.confidence}
+
+Summary:
+${analysis.summary}`;
+
+    return report;
+}
+
+function formatNoVersionChangeAnalysis() returns string {
+    return string `Version Bump: NONE
+No client/types changes; no version bump required`;
+}
+
+public function printVersionChangeAnalysis(AnalysisResult analysis, string recommendedVersion = "") {
+    utils:printOutput(formatVersionChangeAnalysis(analysis, recommendedVersion));
+}
+
+function printNoVersionChangeAnalysis() {
+    utils:printOutput(formatNoVersionChangeAnalysis());
+}
+
 // Accepts a file path so the diff is never passed as a shell argument,
 // avoiding the OS ARG_MAX limit for large connectors (e.g. Asana).
 public function main(string diffFilePath) returns error? {
-    io:fprintln(io:stderr, string `Reading diff from file: ${diffFilePath}`);
+    utils:logInfo(string `reading diff from file: ${diffFilePath}`);
     string gitDiffContent = check io:fileReadString(diffFilePath);
 
-    io:fprintln(io:stderr, "Analyzing git diff...");
-    io:fprintln(io:stderr, string `Diff size: ${gitDiffContent.length()} chars`);
+    utils:logInfo("analyzing git diff...");
+    utils:logVerbose(string `diff size: ${gitDiffContent.length()} chars`);
 
     if gitDiffContent.length() == 0 {
         return error("Git diff file is empty");
     }
 
-    AnalysisResult analysis = check analyzeWithAnthropic(gitDiffContent);
-
-    io:fprintln(io:stderr, SEPARATOR);
-    io:fprintln(io:stderr, "VERSION CHANGE ANALYSIS");
-    io:fprintln(io:stderr, SEPARATOR);
-    io:fprintln(io:stderr, string `
-Version Bump: ${analysis.changeType}
-Confidence:   ${analysis.confidence}
-
-Summary:
-${analysis.summary}`);
-
-    if analysis.breakingChanges.length() > 0 {
-        io:fprintln(io:stderr, "\nBREAKING CHANGES:");
-        foreach string change in analysis.breakingChanges {
-            io:fprintln(io:stderr, string `  - ${change}`);
-        }
-    }
-
-    if analysis.newFeatures.length() > 0 {
-        io:fprintln(io:stderr, "\nNEW FEATURES:");
-        foreach string feature in analysis.newFeatures {
-            io:fprintln(io:stderr, string `  - ${feature}`);
-        }
-    }
-
-    if analysis.bugFixes.length() > 0 {
-        io:fprintln(io:stderr, "\nIMPROVEMENTS:");
-        foreach string fix in analysis.bugFixes {
-            io:fprintln(io:stderr, string `  - ${fix}`);
-        }
-    }
-
-    io:fprintln(io:stderr, SEPARATOR);
+    AnalysisResult analysis = check analyzeVersionChange(gitDiffContent);
+    printVersionChangeAnalysis(analysis);
 
     json resultJson = check analysis.cloneWithType(json);
     check io:fileWriteJson("analysis_result.json", resultJson);
-    io:fprintln(io:stderr, "Saved to: analysis_result.json");
+    utils:logInfo("saved to: analysis_result.json");
 }

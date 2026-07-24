@@ -51,6 +51,11 @@ public type FixResponse record {|
     string explanation;
 |};
 
+public type TestRepairResult record {|
+    boolean applied;
+    string[] modifiedFiles;
+|};
+
 // Track fix attempts for a specific file to prevent oscillation
 public type FixAttempt record {|
     int iteration;
